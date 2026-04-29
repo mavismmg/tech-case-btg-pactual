@@ -25,3 +25,8 @@ class Book(Base):
         onupdate=func.now(),
         nullable=True
     )
+
+    deleted_at = Column(
+        DateTime(timezone=True), 
+        nullable=True
+    )

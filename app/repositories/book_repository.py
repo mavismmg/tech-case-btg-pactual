@@ -30,7 +30,7 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 def get_books(db: Session, skip: int = 0, limit: int = 100) -> list[Book]:
     logger.info("Fetching books from database")
     
-    return db.query(Book).order_by(Book.id).offset(skip).limit(limit).all()
+    return db.query(Book).order_by(Book.published_date).offset(skip).limit(limit).all()
 
 def get_book_by_id(db: Session, book_id: int) -> Book | None:
     logger.info(f"Fetching book with ID: {book_id}")

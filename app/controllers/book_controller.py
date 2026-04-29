@@ -1,6 +1,6 @@
-from typing import Sequence
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import Sequence
 from app.core.database import SessionLocal
 from app.schemas.book import BookCreate, BookResponse
 from app.services import book_service
@@ -19,11 +19,11 @@ def get_db():
 def create_book(book: BookCreate, db: Session = Depends(get_db)) -> BookResponse:
     return book_service.create_book(db, book)
 
-@router.get("/", response_model=list[BookResponse])
+@router.get("/", response_model=list[BookResponse], status_code=status.HTTP_200_OK)
 def list_books(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> Sequence[BookResponse]:
     return book_service.list_books(db, skip, limit)
 
-@router.get("/{book_id}", response_model=BookResponse)
+@router.get("/{book_id}", response_model=BookResponse, status_code=status.HTTP_200_OK)
 def get_book(book_id: int, db: Session = Depends(get_db)) -> BookResponse:
     try:
         return book_service.get_book(db, book_id)

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class BookNotFoundError(Exception):
     def __init__(self, book_id: int):
-        self.message = f"Livro com ID {book_id} não encontrado."
+        self.message = f"Book with ID {book_id} not found."
         super().__init__(self.message)
 
 def create_book(db: Session, book_data: BookCreate) -> Book:
@@ -23,7 +23,7 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
         return new_book
 
     except Exception as e:
-        logger.error(f"Falha ao criar livro '{book_data.title}': {str(e)}", exc_info=True)
+        logger.error(f"Error while creating book '{book_data.title}': {str(e)}", exc_info=True)
 
         raise e
 
