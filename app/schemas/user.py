@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict, field_serializer
+from datetime import datetime
 
 class UserCreate(BaseModel):
     name: str
@@ -8,6 +9,15 @@ class UserResponse(BaseModel):
     id: int
     name: str
     email: EmailStr
+    created_at: datetime
+    updated_at: datetime | None
+    deleted_at: datetime | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("created_at", "updated_at", "deleted_at")
+    def serialize_datetime(self, value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        
+        return value.isoformat().replace("+00:00", "Z")

@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.schemas.user import UserCreate, UserResponse
 from app.services import user_service
-
+from app.services.user_service import UserNotFoundError
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -15,15 +15,20 @@ def get_db():
     finally:
         db.close()
 
-@router.post("/", response_model=UserResponse)
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    existing_user = user_service.list_users(db)
+    return user_service.create_user(db, user)
 
-    if any(u.email == user.email for u in existing_user):
-        raise HTTPException(status_code=400, detail="Email already registered")
+@router.get("/", response_model=list[UserResponse], status_code=status.HTTP_200_OK)
+def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return user_service.list_users(db, skip, limit)
 
-    return user_service.create_user(db, user.name, user.email)
-
-@router.get("/", response_model=list[UserResponse])
-def list_users(db: Session = Depends(get_db)):
-    return user_service.list_users(db)
+@router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
+def get_user(user_id: int, db: Session = Depends(get_db)):
+    try:
+        return user_service.get_user_by_id(db, user_id)
+    except UserNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message
+        )
