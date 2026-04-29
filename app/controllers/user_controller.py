@@ -1,3 +1,4 @@
+from typing import Sequence
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
@@ -16,15 +17,15 @@ def get_db():
         db.close()
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
+def create_user(user: UserCreate, db: Session = Depends(get_db)) -> UserResponse:
     return user_service.create_user(db, user)
 
 @router.get("/", response_model=list[UserResponse], status_code=status.HTTP_200_OK)
-def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> Sequence[UserResponse]:
     return user_service.list_users(db, skip, limit)
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
-def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user(user_id: int, db: Session = Depends(get_db)) -> UserResponse:
     try:
         return user_service.get_user_by_id(db, user_id)
     except UserNotFoundError as e:
