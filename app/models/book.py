@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -30,3 +31,5 @@ class Book(Base):
         DateTime(timezone=True), 
         nullable=True
     )
+
+    loans = relationship("Loan", back_populates="book")

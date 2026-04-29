@@ -13,7 +13,18 @@ class UserNotFoundError(Exception):
         self.message = f"User with ID {user_id} not found."
         super().__init__(self.message)
 
+class UserAlreadyExistsError(Exception):
+    def __init__(self, email: str):
+        self.message = f"User with email {email} already exists."
+        super().__init__(self.message)
+
 def create_user(db: Session, user_data: UserCreate) -> User:
+    existing_user = user_repository.get_user_by_email(db, user_data.email)
+    if existing_user:
+        logger.warning(f"Attempt to create user with existing email: {user_data.email}")
+
+        raise UserAlreadyExistsError(user_data.email)
+    
     logger.info(f"Creating user: {user_data.name} with email {user_data.email}")
     
     try:
@@ -42,3 +53,43 @@ def get_user_by_id(db: Session, user_id: int) -> User | None:
         raise UserNotFoundError(user_id)
     
     return user
+
+def update_user(db: Session, user_id: int, user_data: UserCreate) -> User:
+    user = get_user_by_id(db, user_id)
+
+    if not user:
+        logger.warning(f"User with ID {user_id} not found for update")
+
+        raise UserNotFoundError(user_id)
+    
+    logger.info(f"Updating user with ID {user_id}")
+
+    try:
+        updated_user = user_repository.update_user(db, user, user_data)
+        logger.info(f"Successfully updated user with ID {user_id}")
+
+        return updated_user
+    except Exception as e:
+        logger.error(f"Failed to update user with ID {user_id}: {str(e)}", exc_info=True)
+
+        raise e
+    
+def delete_user(db: Session, user_id: int) -> User:
+    user = get_user_by_id(db, user_id)
+
+    if not user:
+        logger.warning(f"User with ID {user_id} not found for deletion")
+
+        raise UserNotFoundError(user_id)
+    
+    logger.info(f"Soft deleting user with ID {user_id}")
+
+    try:
+        deleted_user = user_repository.soft_delete_user(db, user)
+        logger.info(f"Successfully soft deleted user with ID {user_id}")
+
+        return deleted_user
+    except Exception as e:
+        logger.error(f"Failed to delete user with ID {user_id}: {str(e)}", exc_info=True)
+
+        raise e
