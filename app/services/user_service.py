@@ -1,7 +1,7 @@
 import logging
 
 from sqlalchemy.orm import Session
-from app.repositories import user_repository
+from app.repositories import loan_repository, user_repository
 from app.schemas.user import UserCreate, UserUpdate
 from app.models.user import User
 
@@ -16,6 +16,11 @@ class UserNotFoundError(Exception):
 class UserAlreadyExistsError(Exception):
     def __init__(self, email: str):
         self.message = f"User with email {email} already exists."
+        super().__init__(self.message)
+
+class UserHasActiveLoansError(Exception):
+    def __init__(self, user_id: int):
+        self.message = f"Cannot delete user with ID {user_id}. User has active loans."
         super().__init__(self.message)
 
 def create_user(db: Session, user_data: UserCreate) -> User:
@@ -81,6 +86,12 @@ def delete_user(db: Session, user_id: int) -> User:
         logger.warning(f"User with ID {user_id} not found for deletion")
 
         raise UserNotFoundError(user_id)
+
+    active_loans = loan_repository.get_active_loans_count_by_user_id(db, user_id)
+    if active_loans > 0:
+        logger.warning(f"Attempt to delete user with active loans. User ID: {user_id}")
+
+        raise UserHasActiveLoansError(user_id)
     
     logger.info(f"Soft deleting user with ID {user_id}")
 

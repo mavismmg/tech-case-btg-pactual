@@ -9,7 +9,7 @@ from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.loan import LoanResponse
 from app.schemas.common import PaginatedResponse
 from app.services import user_service, loan_service
-from app.services.user_service import UserNotFoundError, UserAlreadyExistsError
+from app.services.user_service import UserAlreadyExistsError, UserHasActiveLoansError, UserNotFoundError
 
 router = APIRouter(prefix="/users", tags=["Users"])
 librarian_or_admin = Depends(require_roles(AccountRole.ADMIN, AccountRole.LIBRARIAN))
@@ -71,6 +71,11 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
     except UserNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message
+        )
+    except UserHasActiveLoansError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=e.message
         )
 

@@ -21,6 +21,14 @@ if engine.dialect.name == "postgresql":
                 "ON loans (user_id, book_id) WHERE status = 'active'"
             )
         )
+        connection.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS uq_user_email"))
+        connection.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key"))
+        connection.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_active_email "
+                "ON users (email) WHERE deleted_at IS NULL"
+            )
+        )
 
 app.include_router(auth_controller.router)
 app.include_router(account_controller.router)
