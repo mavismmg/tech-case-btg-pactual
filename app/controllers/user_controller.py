@@ -65,5 +65,5 @@ def get_user_loans(user_id: int, skip: int = 0, limit: int = 100, db: Session = 
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Ocorreu um erro interno ao buscar os empréstimos do usuário."
+            detail="An error occurred while fetching user loans."
         )

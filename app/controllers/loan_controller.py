@@ -35,7 +35,7 @@ def create_loan(user_id: int, book_id: int, db: Session = Depends(get_db)) -> Lo
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Ocorreu um erro interno ao processar o empréstimo."
+            detail="An error occurred while creating the loan."
         )
 
 @router.get("/", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
@@ -71,5 +71,5 @@ def return_loan(loan_id: int, db: Session = Depends(get_db)) -> LoanResponse:
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Ocorreu um erro interno ao processar a devolução."
+            detail="An error occurred while returning the loan."
         )

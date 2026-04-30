@@ -14,10 +14,10 @@ start: db
 	docker compose up --build
 
 db:
-	docker compose up -d db
+	docker compose up -d db redis
 
 test_db:
-	docker compose up -d test_db
+	docker compose up -d test_db redis
 
 stop:
 	docker compose down

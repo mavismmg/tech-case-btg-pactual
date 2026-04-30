@@ -47,7 +47,7 @@ def get_book_by_id(db: Session, book_id: int) -> Book | None:
         db.query(Book)
         .options(joinedload(Book.author))
         .filter(Book.id == book_id)
-        .with_for_update()
+        .with_for_update(of=Book)
         .first()
     )
 

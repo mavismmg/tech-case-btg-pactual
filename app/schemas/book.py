@@ -31,3 +31,10 @@ class BookResponse(BaseModel):
             return None
         
         return value.isoformat().replace("+00:00", "Z")
+
+
+class AvailableExemplarsCountResponse(BaseModel):
+    isbn: str
+    available_exemplars: int
+    is_available: bool
+    message: str

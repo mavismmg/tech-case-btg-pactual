@@ -47,7 +47,7 @@ def get_loan_by_id(db: Session, loan_id: int) -> Loan | None:
         db.query(Loan)
         .options(joinedload(Loan.user), joinedload(Loan.book))
         .filter(Loan.id == loan_id)
-        .with_for_update()
+        .with_for_update(of=Loan)
         .first()
     )
 

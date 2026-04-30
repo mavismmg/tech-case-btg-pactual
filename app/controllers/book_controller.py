@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Sequence
 from app.dependencies import get_db
-from app.schemas.book import BookCreate, BookResponse
+from app.schemas.book import AvailableExemplarsCountResponse, BookCreate, BookResponse
 from app.schemas.common import PaginatedResponse
 from app.services import book_service
 from app.services.book_service import BookNotFoundError, BookAuthorNotFoundError, BookCreationError
@@ -30,10 +30,20 @@ def list_books(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -
     book_responses = [BookResponse.model_validate(book) for book in books]
     return PaginatedResponse(items=book_responses, total=total, skip=skip, limit=limit)
 
-@router.get("/count/{isbn}", response_model=int, status_code=status.HTTP_200_OK)
-def count_available_exemplars(isbn: str, db: Session = Depends(get_db)) -> int:
+@router.get("/count/{isbn}", response_model=AvailableExemplarsCountResponse, status_code=status.HTTP_200_OK)
+def count_available_exemplars(isbn: str, db: Session = Depends(get_db)) -> AvailableExemplarsCountResponse:
     try:
-        return book_service.count_available_exemplars(db, isbn)
+        available_exemplars = book_service.count_available_exemplars(db, isbn)
+        return AvailableExemplarsCountResponse(
+            isbn=isbn,
+            available_exemplars=available_exemplars,
+            is_available=available_exemplars > 0,
+            message=(
+                f"There are {available_exemplars} available exemplars for ISBN {isbn}."
+                if available_exemplars > 0
+                else f"There are no available exemplars for ISBN {isbn}."
+            ),
+        )
     except BookNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
