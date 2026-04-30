@@ -1,6 +1,6 @@
 import logging
-from contextlib import ExitStack
-from typing import ContextManager
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.core.cache import redis_lock
@@ -55,11 +55,19 @@ def _loan_book_lock_key(book_id: int) -> str:
     return f"loans:create:book:{book_id}"
 
 
-def _transaction(db: Session) -> ContextManager:
+@contextmanager
+def _transaction(db: Session) -> Iterator[None]:
     if db.in_transaction():
-        return db.begin_nested()
+        try:
+            yield
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        return
 
-    return db.begin()
+    with db.begin():
+        yield
 
 
 def create_loan(db: Session, user_id: int, book_id: int) -> Loan:

@@ -2,6 +2,9 @@ from typing import Sequence
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.dependencies import get_db
+from app.dependencies import require_roles
+from app.core.rate_limit import rate_limit
+from app.models.account import AccountRole
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.loan import LoanResponse
 from app.schemas.common import PaginatedResponse
@@ -9,8 +12,14 @@ from app.services import user_service, loan_service
 from app.services.user_service import UserNotFoundError, UserAlreadyExistsError
 
 router = APIRouter(prefix="/users", tags=["Users"])
+librarian_or_admin = Depends(require_roles(AccountRole.ADMIN, AccountRole.LIBRARIAN))
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[librarian_or_admin, Depends(rate_limit(limit=20))],
+)
 def create_user(user: UserCreate, db: Session = Depends(get_db)) -> UserResponse:
     try:
         return user_service.create_user(db, user)
@@ -36,7 +45,12 @@ def get_user(user_id: int, db: Session = Depends(get_db)) -> UserResponse:
             detail=e.message
         )
 
-@router.put("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
+@router.put(
+    "/{user_id}",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[librarian_or_admin, Depends(rate_limit(limit=20))],
+)
 def update_user(user_id: int, user_data: UserUpdate, db: Session = Depends(get_db)) -> UserResponse:
     try:
         return user_service.update_user(db, user_id, user_data)
@@ -46,7 +60,11 @@ def update_user(user_id: int, user_data: UserUpdate, db: Session = Depends(get_d
             detail=e.message
         )
     
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[librarian_or_admin, Depends(rate_limit(limit=20))],
+)
 def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
     try:
         user_service.delete_user(db, user_id)

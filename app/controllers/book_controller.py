@@ -2,14 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Sequence
 from app.dependencies import get_db
+from app.dependencies import require_roles
+from app.core.rate_limit import rate_limit
+from app.models.account import AccountRole
 from app.schemas.book import AvailableExemplarsCountResponse, BookCreate, BookResponse
 from app.schemas.common import PaginatedResponse
 from app.services import book_service
 from app.services.book_service import BookNotFoundError, BookAuthorNotFoundError, BookCreationError
 
 router = APIRouter(prefix="/books", tags=["Books"])
+librarian_or_admin = Depends(require_roles(AccountRole.ADMIN, AccountRole.LIBRARIAN))
 
-@router.post("/", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=BookResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[librarian_or_admin, Depends(rate_limit(limit=10))],
+)
 def create_book(book: BookCreate, db: Session = Depends(get_db)) -> BookResponse:
     try:
         return book_service.create_book(db, book)

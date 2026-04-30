@@ -2,14 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Sequence
 from app.dependencies import get_db
+from app.dependencies import require_roles
+from app.core.rate_limit import rate_limit
+from app.models.account import AccountRole
 from app.schemas.loan import LoanResponse
 from app.schemas.common import PaginatedResponse
 from app.services import loan_service
 from app.services.loan_service import LoanNotFoundError, LoanBookNotFoundError, LoanBookIsNotAvailableError, LoanLimitExceededError, LoanUserNotFoundError, LoanAlreadyReturnedError 
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
+librarian_or_admin = Depends(require_roles(AccountRole.ADMIN, AccountRole.LIBRARIAN))
 
-@router.post("/", response_model=LoanResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=LoanResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[librarian_or_admin, Depends(rate_limit(limit=5))],
+)
 def create_loan(user_id: int, book_id: int, db: Session = Depends(get_db)) -> LoanResponse:
     try:
         return loan_service.create_loan(db, user_id, book_id)
@@ -54,7 +63,12 @@ def get_loan(loan_id: int, db: Session = Depends(get_db)) -> LoanResponse:
             detail=e.message
         )
 
-@router.put("/{loan_id}/return", response_model=LoanResponse, status_code=status.HTTP_200_OK)
+@router.put(
+    "/{loan_id}/return",
+    response_model=LoanResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[librarian_or_admin, Depends(rate_limit(limit=5))],
+)
 def return_loan(loan_id: int, db: Session = Depends(get_db)) -> LoanResponse:
     try:
         return loan_service.return_loan(db, loan_id)

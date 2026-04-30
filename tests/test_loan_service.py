@@ -29,6 +29,8 @@ def test_create_loan(db):
     assert loan.book_id == book.id
     assert loan.status == LoanStatusMock.ACTIVE
     assert loan.fine_value == 0.0
+    db.refresh(book)
+    assert book.is_available is False
 
 def test_return_loan(db):
     user_data = UserCreate(name="Test User", email="test@example.com")
@@ -47,6 +49,12 @@ def test_return_loan(db):
     assert returned_loan.status == LoanStatusMock.RETURNED
     assert returned_loan.actual_return_date is not None
     assert returned_loan.fine_value == 0.0
+
+    second_loan = create_loan(db, user.id, book.id)
+    second_returned_loan = return_loan(db, second_loan.id)
+
+    assert second_returned_loan.status == LoanStatusMock.RETURNED
+    assert second_returned_loan.actual_return_date is not None
 
 def test_return_loan_already_returned(db):
     user_data = UserCreate(name="Test User", email="test@example.com")
