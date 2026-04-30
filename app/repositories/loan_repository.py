@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.loan import Loan
 from app.schemas.loan import LoanCreate
@@ -29,12 +29,24 @@ def create_loan(db: Session, loan_data: LoanCreate) -> Loan:
 def get_loans(db: Session, skip: int = 0, limit: int = 100) -> list[Loan]:
     logger.info("Fetching loans from database")
     
-    return db.query(Loan).order_by(Loan.loan_date).offset(skip).limit(limit).all()
+    return (
+        db.query(Loan)
+        .options(joinedload(Loan.user), joinedload(Loan.book))
+        .order_by(Loan.loan_date)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 def get_loan_by_id(db: Session, loan_id: int) -> Loan | None:
     logger.info(f"Fetching loan with ID: {loan_id}")
 
-    return db.get(Loan, loan_id)
+    return (
+        db.query(Loan)
+        .options(joinedload(Loan.user), joinedload(Loan.book))
+        .filter(Loan.id == loan_id)
+        .one_or_none()
+    )
 
 def get_active_loans_count_by_user_id(db: Session, user_id: int) -> int:
     logger.info(f"Counting active loans for user ID: {user_id}")

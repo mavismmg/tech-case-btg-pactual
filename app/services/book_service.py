@@ -57,3 +57,13 @@ def get_book(db: Session, book_id: int) -> Book:
         raise BookNotFoundError(book_id)
     
     return book
+
+def count_available_exemplars(db: Session, isbn: str) -> int:
+    logger.info(f"Counting available exemplars for ISBN: {isbn}")
+
+    return book_repository.count_exemplars_by_isbn(db, isbn)
+
+def get_exemplars_by_isbn(db: Session, isbn: str) -> list[Book]:
+    logger.info(f"Fetching exemplars for ISBN: {isbn}")
+
+    return book_repository.get_exemplars_by_isbn(db, isbn)

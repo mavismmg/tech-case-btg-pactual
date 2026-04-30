@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 def create_book(db: Session, book_data: BookCreate) -> Book:
     db_book = Book(
+        isbn=book_data.isbn,
         author_id=book_data.author_id,
         title=book_data.title,
         published_date=book_data.published_date
@@ -52,3 +53,13 @@ def get_book_by_id(db: Session, book_id: int) -> Book | None:
         .filter(Book.id == book_id)
         .one_or_none()
     )
+
+def count_exemplars_by_isbn(db: Session, isbn: str) -> int:
+    logger.info(f"Counting exemplars for ISBN: {isbn}")
+
+    return db.query(Book).filter(Book.isbn == isbn, Book.is_available == True).count()
+
+def get_exemplars_by_isbn(db: Session, isbn: str) -> list[Book]:
+    logger.info(f"Fetching exemplars for ISBN: {isbn}")
+
+    return db.query(Book).options(joinedload(Book.author)).filter(Book.isbn == isbn, Book.is_available == True).all()

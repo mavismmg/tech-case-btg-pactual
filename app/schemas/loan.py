@@ -1,6 +1,9 @@
 from pydantic import BaseModel, ConfigDict, field_serializer
 from datetime import datetime
 
+from app.schemas.book import BookResponse
+from app.schemas.user import UserResponse
+
 class LoanCreate(BaseModel):
     user_id: int
     book_id: int
@@ -9,6 +12,8 @@ class LoanResponse(BaseModel):
     id: int
     user_id: int
     book_id: int
+    user: UserResponse | None = None
+    book: BookResponse | None = None
     loan_date: datetime
     expected_return_date: datetime
     actual_return_date: datetime | None

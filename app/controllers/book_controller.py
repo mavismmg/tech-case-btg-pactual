@@ -43,3 +43,23 @@ def get_book(book_id: int, db: Session = Depends(get_db)) -> BookResponse:
             status_code=status.HTTP_404_NOT_FOUND, 
             detail=e.message
         )
+    
+@router.get("/count/{isbn}", response_model=int, status_code=status.HTTP_200_OK)
+def count_available_exemplars(isbn: str, db: Session = Depends(get_db)) -> int:
+    try:
+        return book_service.count_available_exemplars(db, isbn)
+    except BookNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    
+@router.get("/exemplars/{isbn}", response_model=list[BookResponse], status_code=status.HTTP_200_OK)
+def get_exemplars_by_isbn(isbn: str, db: Session = Depends(get_db)) -> Sequence[BookResponse]:
+    try:
+        return book_service.get_exemplars_by_isbn(db, isbn)
+    except BookNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
