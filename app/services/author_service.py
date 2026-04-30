@@ -43,7 +43,7 @@ def create_author(db: Session, author_data: AuthorCreate) -> Author:
 
         raise AuthorCreationError(author_data.name, e)
     
-def list_authors(db: Session, skip: int = 0, limit: int = 100) -> list[Author]:
+def list_authors(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Author], int]:
     logger.info(f"Listing authors with skip={skip} and limit={limit}")
     
     return author_repository.get_authors(db, skip, limit)

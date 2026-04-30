@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy.orm import Session
 from app.repositories import user_repository
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserUpdate
 from app.models.user import User
 
 logging.basicConfig(level=logging.INFO)
@@ -37,7 +37,7 @@ def create_user(db: Session, user_data: UserCreate) -> User:
 
         raise e
 
-def list_users(db: Session, skip: int = 0, limit: int = 100) -> list[User]:
+def list_users(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[User], int]:
     logger.info(f"Listing users with skip={skip} and limit={limit}")
     
     return user_repository.get_users(db, skip, limit)
@@ -54,7 +54,7 @@ def get_user_by_id(db: Session, user_id: int) -> User | None:
     
     return user
 
-def update_user(db: Session, user_id: int, user_data: UserCreate) -> User:
+def update_user(db: Session, user_id: int, user_data: UserUpdate) -> User:
     user = get_user_by_id(db, user_id)
 
     if not user:

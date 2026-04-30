@@ -1,15 +1,15 @@
 from datetime import datetime, date
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, field_serializer, Field
 
 from app.schemas.author import AuthorResponse
 
 
 class BookCreate(BaseModel):
-    isbn: str
-    author_id: int
-    title: str
-    published_date: date
+    isbn: str = Field(..., min_length=10, max_length=13, pattern=r'^\d+$')
+    author_id: int = Field(..., gt=0)
+    title: str = Field(..., min_length=1, max_length=255)
+    published_date: date = Field(..., le=date.today())
 
 class BookResponse(BaseModel):
     id: int

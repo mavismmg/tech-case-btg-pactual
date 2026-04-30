@@ -26,10 +26,13 @@ def create_author(db: Session, author_data: AuthorCreate) -> Author:
 
         raise e
     
-def get_authors(db: Session, skip: int = 0, limit: int = 100) -> list[Author]:
+def get_authors(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Author], int]:
     logger.info("Fetching authors from database")
     
-    return db.query(Author).order_by(Author.created_at).offset(skip).limit(limit).all()
+    query = db.query(Author)
+    total = query.count()
+    authors = query.order_by(Author.created_at).offset(skip).limit(limit).all()
+    return authors, total
 
 def get_author_by_id(db: Session, author_id: int) -> Author | None:
     logger.info(f"Fetching author with ID: {author_id}")

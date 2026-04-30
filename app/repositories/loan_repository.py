@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.loan import Loan
+from app.models.user import User
 from app.schemas.loan import LoanCreate
 
 import logging
@@ -26,17 +27,18 @@ def create_loan(db: Session, loan_data: LoanCreate) -> Loan:
 
         raise e
     
-def get_loans(db: Session, skip: int = 0, limit: int = 100) -> list[Loan]:
+def get_loans(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
     logger.info("Fetching loans from database")
     
-    return (
+    query = (
         db.query(Loan)
         .options(joinedload(Loan.user), joinedload(Loan.book))
-        .order_by(Loan.loan_date)
-        .offset(skip)
-        .limit(limit)
-        .all()
+        .join(Loan.user)
+        .filter(User.deleted_at.is_(None))
     )
+    total = query.count()
+    loans = query.order_by(Loan.loan_date).offset(skip).limit(limit).all()
+    return loans, total
 
 def get_loan_by_id(db: Session, loan_id: int) -> Loan | None:
     logger.info(f"Fetching loan with ID: {loan_id}")
@@ -47,6 +49,18 @@ def get_loan_by_id(db: Session, loan_id: int) -> Loan | None:
         .filter(Loan.id == loan_id)
         .one_or_none()
     )
+
+def get_loans_by_user_id(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
+    logger.info(f"Fetching loans for user ID: {user_id}")
+
+    query = (
+        db.query(Loan)
+        .options(joinedload(Loan.user), joinedload(Loan.book))
+        .filter(Loan.user_id == user_id)
+    )
+    total = query.count()
+    loans = query.order_by(Loan.loan_date).offset(skip).limit(limit).all()
+    return loans, total
 
 def get_active_loans_count_by_user_id(db: Session, user_id: int) -> int:
     logger.info(f"Counting active loans for user ID: {user_id}")

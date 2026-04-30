@@ -32,17 +32,13 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 
         raise e
 
-def get_books(db: Session, skip: int = 0, limit: int = 100) -> list[Book]:
+def get_books(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Book], int]:
     logger.info("Fetching books from database")
     
-    return (
-        db.query(Book)
-        .options(joinedload(Book.author))
-        .order_by(Book.published_date)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    query = db.query(Book).options(joinedload(Book.author))
+    total = query.count()
+    books = query.order_by(Book.published_date).offset(skip).limit(limit).all()
+    return books, total
 
 def get_book_by_id(db: Session, book_id: int) -> Book | None:
     logger.info(f"Fetching book with ID: {book_id}")

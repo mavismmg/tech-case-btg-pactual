@@ -27,10 +27,13 @@ def create_user(db: Session, user_data: UserCreate) -> User:
 
         raise e
 
-def get_users(db: Session, skip: int = 0, limit: int = 100) -> list[User]:
+def get_users(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[User], int]:
     logger.info("Fetching users from database")
 
-    return db.query(User).filter(User.deleted_at.is_(None)).order_by(User.created_at).offset(skip).limit(limit).all()
+    query = db.query(User).filter(User.deleted_at.is_(None))
+    total = query.count()
+    users = query.order_by(User.created_at).offset(skip).limit(limit).all()
+    return users, total
 
 def get_user_by_id(db: Session, user_id: int) -> User | None:
     logger.info(f"Fetching user by ID: {user_id}")
@@ -40,7 +43,7 @@ def get_user_by_id(db: Session, user_id: int) -> User | None:
 def get_user_by_email(db: Session, email: str) -> User | None:
     logger.info(f"Fetching user by email: {email}")
 
-    return db.query(User).filter(User.email == email).first()
+    return db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first()
 
 def update_user(db: Session, db_user: User, user_data: UserUpdate) -> User:
     updated_data = user_data.model_dump(exclude_unset=True)
@@ -49,8 +52,6 @@ def update_user(db: Session, db_user: User, user_data: UserUpdate) -> User:
         setattr(db_user, key, value)
 
     try:
-        db_user.updated_at = datetime.now(timezone.utc)
-        
         db.commit()
         db.refresh(db_user)
 

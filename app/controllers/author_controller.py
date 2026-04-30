@@ -1,19 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Sequence
-from app.core.database import SessionLocal
+from app.dependencies import get_db
 from app.schemas.author import AuthorCreate, AuthorResponse
+from app.schemas.common import PaginatedResponse
 from app.services import author_service
 from app.services.author_service import AuthorNotFoundError, AuthorCreationError, AuthorAlreadyExistsError
 
 router = APIRouter(prefix="/authors", tags=["Authors"])
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/", response_model=AuthorResponse, status_code=status.HTTP_201_CREATED)
 def create_author(author: AuthorCreate, db: Session = Depends(get_db)) -> AuthorResponse:
@@ -30,9 +23,11 @@ def create_author(author: AuthorCreate, db: Session = Depends(get_db)) -> Author
             detail=e.message
         )
 
-@router.get("/", response_model=list[AuthorResponse], status_code=status.HTTP_200_OK)
-def get_authors(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> Sequence[AuthorResponse]:
-    return author_service.list_authors(db, skip, limit)
+@router.get("/", response_model=PaginatedResponse[AuthorResponse], status_code=status.HTTP_200_OK)
+def get_authors(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[AuthorResponse]:
+    authors, total = author_service.list_authors(db, skip, limit)
+    author_responses = [AuthorResponse.model_validate(author) for author in authors]
+    return PaginatedResponse(items=author_responses, total=total, skip=skip, limit=limit)
 
 @router.get("/{author_id}", response_model=AuthorResponse, status_code=status.HTTP_200_OK)
 def get_author(author_id: int, db: Session = Depends(get_db)) -> AuthorResponse:

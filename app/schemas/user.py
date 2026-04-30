@@ -1,12 +1,12 @@
-from pydantic import BaseModel, EmailStr, ConfigDict, field_serializer
+from pydantic import BaseModel, EmailStr, ConfigDict, field_serializer, Field
 from datetime import datetime
 
 class UserCreate(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
 
 class UserUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(None, min_length=1, max_length=255)
     email: EmailStr | None = None
 
 class UserResponse(BaseModel):

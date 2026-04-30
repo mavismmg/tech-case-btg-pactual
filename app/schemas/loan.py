@@ -1,12 +1,12 @@
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, field_serializer, Field
 from datetime import datetime
 
 from app.schemas.book import BookResponse
 from app.schemas.user import UserResponse
 
 class LoanCreate(BaseModel):
-    user_id: int
-    book_id: int
+    user_id: int = Field(..., gt=0)
+    book_id: int = Field(..., gt=0)
 
 class LoanResponse(BaseModel):
     id: int

@@ -1,8 +1,8 @@
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, field_serializer, Field
 from datetime import datetime
 
 class AuthorCreate(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=255)
 
 class AuthorResponse(BaseModel):
     id: int

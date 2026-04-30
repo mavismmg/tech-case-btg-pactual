@@ -41,7 +41,7 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 
         raise BookCreationError(book_data.title, e)
 
-def list_books(db: Session, skip: int = 0, limit: int = 100) -> list[Book]:
+def list_books(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Book], int]:
     logger.info(f"Listing books with skip={skip} and limit={limit}")
     
     return book_repository.get_books(db, skip, limit)
