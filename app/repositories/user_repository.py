@@ -38,7 +38,7 @@ def get_users(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[User],
 def get_user_by_id(db: Session, user_id: int) -> User | None:
     logger.info(f"Fetching user by ID: {user_id}")
     
-    return db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    return db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).with_for_update().first()
 
 def get_user_by_email(db: Session, email: str) -> User | None:
     logger.info(f"Fetching user by email: {email}")

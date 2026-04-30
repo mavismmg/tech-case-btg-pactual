@@ -47,7 +47,8 @@ def get_book_by_id(db: Session, book_id: int) -> Book | None:
         db.query(Book)
         .options(joinedload(Book.author))
         .filter(Book.id == book_id)
-        .one_or_none()
+        .with_for_update()
+        .first()
     )
 
 def count_exemplars_by_isbn(db: Session, isbn: str) -> int:

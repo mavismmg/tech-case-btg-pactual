@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -9,6 +10,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.models.user import User # Import only visible for pylance 
     from app.models.book import Book # Import only visible for pylance
+
+class LoanStatus(str, Enum):
+    ACTIVE = "active"
+    RETURNED = "returned"
 
 class Loan(Base):
     __tablename__ = "loans"

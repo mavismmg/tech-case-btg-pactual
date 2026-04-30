@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
-from app.models.loan import Loan
+from app.models.loan import Loan, LoanStatus
 from app.models.user import User
 from app.schemas.loan import LoanCreate
 
@@ -47,7 +47,8 @@ def get_loan_by_id(db: Session, loan_id: int) -> Loan | None:
         db.query(Loan)
         .options(joinedload(Loan.user), joinedload(Loan.book))
         .filter(Loan.id == loan_id)
-        .one_or_none()
+        .with_for_update()
+        .first()
     )
 
 def get_loans_by_user_id(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
@@ -65,4 +66,4 @@ def get_loans_by_user_id(db: Session, user_id: int, skip: int = 0, limit: int = 
 def get_active_loans_count_by_user_id(db: Session, user_id: int) -> int:
     logger.info(f"Counting active loans for user ID: {user_id}")
 
-    return db.query(Loan).filter(Loan.user_id == user_id, Loan.status == "active").count()
+    return db.query(Loan).filter(Loan.user_id == user_id, Loan.status == LoanStatus.ACTIVE).count()

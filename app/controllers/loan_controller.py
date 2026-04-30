@@ -5,7 +5,7 @@ from app.dependencies import get_db
 from app.schemas.loan import LoanResponse
 from app.schemas.common import PaginatedResponse
 from app.services import loan_service
-from app.services.loan_service import LoanNotFoundError, LoanBookNotFoundError, LoanBookIsNotAvailableError, LoanHasMoreThanThreeActiveLoansError, LoanUserNotFoundError, LoanAlreadyReturnedError 
+from app.services.loan_service import LoanNotFoundError, LoanBookNotFoundError, LoanBookIsNotAvailableError, LoanLimitExceededError, LoanUserNotFoundError, LoanAlreadyReturnedError 
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
 
@@ -26,7 +26,7 @@ def create_loan(user_id: int, book_id: int, db: Session = Depends(get_db)) -> Lo
             detail=e.message
         )
         
-    except (LoanBookIsNotAvailableError, LoanHasMoreThanThreeActiveLoansError) as e:
+    except (LoanBookIsNotAvailableError, LoanLimitExceededError) as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=e.message
