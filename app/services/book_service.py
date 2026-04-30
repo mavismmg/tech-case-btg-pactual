@@ -1,7 +1,7 @@
 import logging
 
 from sqlalchemy.orm import Session
-from app.repositories import book_repository
+from app.repositories import author_repository, book_repository
 from app.schemas.book import BookCreate
 from app.models.book import Book
 
@@ -13,8 +13,22 @@ class BookNotFoundError(Exception):
         self.message = f"Book with ID {book_id} not found."
         super().__init__(self.message)
 
+class BookAuthorNotFoundError(Exception):
+    def __init__(self, author_id: int):
+        self.message = f"Author with ID {author_id} not found for the book."
+        super().__init__(self.message)
+
+class BookCreationError(Exception):
+    def __init__(self, title: str, original_exception: Exception):
+        self.message = f"Failed to create book '{title}'. Reason: {str(original_exception)}"
+        super().__init__(self.message)
+
 def create_book(db: Session, book_data: BookCreate) -> Book:
-    logger.info(f"Creating book: {book_data.title} by {book_data.author}, published in {book_data.published_date}")
+    existing_author = author_repository.get_author_by_id(db, book_data.author_id)
+    if not existing_author:
+        logger.warning(f"Attempt to create book with non-existent author ID: {book_data.author_id}")
+
+        raise BookAuthorNotFoundError(book_data.author_id)
 
     try:
         new_book = book_repository.create_book(db, book_data)
@@ -22,10 +36,10 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 
         return new_book
 
-    except Exception as e:
+    except BookCreationError as e:
         logger.error(f"Error while creating book '{book_data.title}': {str(e)}", exc_info=True)
 
-        raise e
+        raise BookCreationError(book_data.title, e)
 
 def list_books(db: Session, skip: int = 0, limit: int = 100) -> list[Book]:
     logger.info(f"Listing books with skip={skip} and limit={limit}")

@@ -1,16 +1,20 @@
-from pydantic import BaseModel, ConfigDict, field_serializer
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, field_serializer
+
+from app.schemas.author import AuthorResponse
 
 
 class BookCreate(BaseModel):
+    author_id: int
     title: str
-    author: str
     published_date: datetime
 
 class BookResponse(BaseModel):
     id: int
     title: str
-    author: str
+    author_id: int
+    author: AuthorResponse | None = None
     published_date: datetime
     is_available: bool
     created_at: datetime

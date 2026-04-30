@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.book import Book
 from app.schemas.book import BookCreate
@@ -10,7 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 def create_book(db: Session, book_data: BookCreate) -> Book:
-    db_book = Book(**book_data.model_dump())
+    db_book = Book(
+        author_id=book_data.author_id,
+        title=book_data.title,
+        published_date=book_data.published_date
+    )
 
     try:
         db.add(db_book)
@@ -30,9 +34,21 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 def get_books(db: Session, skip: int = 0, limit: int = 100) -> list[Book]:
     logger.info("Fetching books from database")
     
-    return db.query(Book).order_by(Book.published_date).offset(skip).limit(limit).all()
+    return (
+        db.query(Book)
+        .options(joinedload(Book.author))
+        .order_by(Book.published_date)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 def get_book_by_id(db: Session, book_id: int) -> Book | None:
     logger.info(f"Fetching book with ID: {book_id}")
 
-    return db.get(Book, book_id)
+    return (
+        db.query(Book)
+        .options(joinedload(Book.author))
+        .filter(Book.id == book_id)
+        .one_or_none()
+    )
