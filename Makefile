@@ -16,6 +16,9 @@ start: db
 db:
 	docker compose up -d db
 
+test_db:
+	docker compose up -d test_db
+
 stop:
 	docker compose down
 
