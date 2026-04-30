@@ -9,19 +9,15 @@ from app.schemas.author import AuthorCreate
 from app.schemas.book import BookCreate
 
 def test_create_loan(db):
-    # Create user
     user_data = UserCreate(name="Test User", email="test@example.com")
     user = create_user(db, user_data)
     
-    # Create author
     author_data = AuthorCreate(name="Test Author")
     author = create_author(db, author_data)
     
-    # Create book
     book_data = BookCreate(isbn="1234567890", author_id=author.id, title="Test Book", published_date=datetime(2023, 1, 1).date())
     book = create_book(db, book_data)
     
-    # Create loan
     loan = create_loan(db, user.id, book.id)
     
     assert loan.user_id == user.id
@@ -30,7 +26,6 @@ def test_create_loan(db):
     assert loan.fine_value == 0.0
 
 def test_return_loan(db):
-    # Create user, author, book, loan as above
     user_data = UserCreate(name="Test User", email="test@example.com")
     user = create_user(db, user_data)
     
@@ -42,15 +37,13 @@ def test_return_loan(db):
     
     loan = create_loan(db, user.id, book.id)
     
-    # Return loan
     returned_loan = return_loan(db, loan.id)
     
     assert returned_loan.status == "returned"
     assert returned_loan.actual_return_date is not None
-    assert returned_loan.fine_value == 0.0  # No overdue
+    assert returned_loan.fine_value == 0.0
 
 def test_return_loan_already_returned(db):
-    # Create and return loan
     user_data = UserCreate(name="Test User", email="test@example.com")
     user = create_user(db, user_data)
     
@@ -63,6 +56,5 @@ def test_return_loan_already_returned(db):
     loan = create_loan(db, user.id, book.id)
     return_loan(db, loan.id)
     
-    # Try to return again
     with pytest.raises(LoanAlreadyReturnedError):
         return_loan(db, loan.id)
