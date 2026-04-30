@@ -45,6 +45,11 @@ def get_user_by_email(db: Session, email: str) -> User | None:
 
     return db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first()
 
+def get_user_by_email_including_deleted(db: Session, email: str) -> User | None:
+    logger.info(f"Fetching user by email including deleted: {email}")
+
+    return db.query(User).filter(User.email == email).with_for_update(of=User).first()
+
 def update_user(db: Session, db_user: User, user_data: UserUpdate) -> User:
     updated_data = user_data.model_dump(exclude_unset=True)
 
@@ -60,6 +65,24 @@ def update_user(db: Session, db_user: User, user_data: UserUpdate) -> User:
         db.rollback()
 
         logger.error(f"Error while updating user: {str(e)}", exc_info=True)
+
+        raise e
+
+def restore_user(db: Session, db_user: User, user_data: UserCreate) -> User:
+    try:
+        db_user.name = user_data.name
+        db_user.email = user_data.email
+        db_user.deleted_at = None
+        db_user.is_active = True
+
+        db.commit()
+        db.refresh(db_user)
+
+        return db_user
+    except SQLAlchemyError as e:
+        db.rollback()
+
+        logger.error(f"Error while restoring user: {str(e)}", exc_info=True)
 
         raise e
     

@@ -24,8 +24,8 @@ class UserHasActiveLoansError(Exception):
         super().__init__(self.message)
 
 def create_user(db: Session, user_data: UserCreate) -> User:
-    existing_user = user_repository.get_user_by_email(db, user_data.email)
-    if existing_user:
+    existing_user = user_repository.get_user_by_email_including_deleted(db, user_data.email)
+    if existing_user and existing_user.deleted_at is None:
         logger.warning(f"Attempt to create user with existing email: {user_data.email}")
 
         raise UserAlreadyExistsError(user_data.email)
@@ -33,6 +33,11 @@ def create_user(db: Session, user_data: UserCreate) -> User:
     logger.info(f"Creating user: {user_data.name} with email {user_data.email}")
     
     try:
+        if existing_user:
+            new_user = user_repository.restore_user(db, existing_user, user_data)
+            logger.info(f"Successfully restored user. ID: {new_user.id}")
+            return new_user
+
         new_user = user_repository.create_user(db, user_data)
         logger.info(f"Successfully created user. ID: {new_user.id}")
 
