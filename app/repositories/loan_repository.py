@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.loan import Loan, LoanStatus
@@ -27,7 +29,14 @@ def create_loan(db: Session, loan_data: LoanCreate) -> Loan:
 
         raise e
     
-def get_loans(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
+def get_loans(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+    status: LoanStatus | None = None,
+    user_id: int | None = None,
+    overdue: bool | None = None,
+) -> tuple[list[Loan], int]:
     logger.info("Fetching loans from database")
     
     query = (
@@ -36,6 +45,24 @@ def get_loans(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Loan],
         .join(Loan.user)
         .filter(User.deleted_at.is_(None))
     )
+
+    if status is not None:
+        query = query.filter(Loan.status == status.value)
+
+    if user_id is not None:
+        query = query.filter(Loan.user_id == user_id)
+
+    if overdue is True:
+        query = query.filter(
+            Loan.status == LoanStatus.ACTIVE.value,
+            Loan.expected_return_date < datetime.now(timezone.utc),
+        )
+    elif overdue is False:
+        query = query.filter(
+            (Loan.status != LoanStatus.ACTIVE.value)
+            | (Loan.expected_return_date >= datetime.now(timezone.utc))
+        )
+
     total = query.count()
     loans = query.order_by(Loan.loan_date).offset(skip).limit(limit).all()
     return loans, total
