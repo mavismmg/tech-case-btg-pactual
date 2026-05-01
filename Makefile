@@ -6,7 +6,7 @@ PYTEST=$(VENV_DIR)/bin/pytest
 RUFF=$(VENV_DIR)/bin/ruff
 ALEMBIC=$(VENV_DIR)/bin/alembic
 
-.PHONY: install start db test_db stop local local-soft migrate revision seed format lint lint-fix test check
+.PHONY: install start db test_db stop local local-soft migrate revision seed format lint lint-fix test coverage check
 
 install:
 	$(PYTHON) -m venv $(VENV_DIR)
@@ -51,5 +51,8 @@ lint-fix:
 
 test:
 	$(PYTEST)
+
+coverage:
+	$(PYTEST) --cov=app --cov-report=term-missing
 
 check: lint test

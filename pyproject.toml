@@ -19,6 +19,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "app/server.py" = ["F401"]
+"alembic/env.py" = ["F401"]
+"scripts/seed_dev.py" = ["F401"]
 "tests/conftest.py" = ["F401"]
 
 [tool.ruff.format]
