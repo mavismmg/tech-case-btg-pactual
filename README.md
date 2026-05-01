@@ -679,6 +679,16 @@ O frontend em React/Vite implementa uma console operacional simples:
 
 Ele existe principalmente para mostrar a API em fluxos reais e facilitar avaliação manual. Alguns pontos de UX, responsividade e acabamento ainda poderiam evoluir em um produto final. A prioridade do case continuou sendo backend: regras de negócio, consistência, segurança básica, testes e organização.
 
+Instalar Node.js 22 com nvm, caso ainda não tenha uma versão compatível:
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+nvm install 22
+nvm use 22
+node --version
+npm --version
+```
+
 Rodar:
 
 ```bash
