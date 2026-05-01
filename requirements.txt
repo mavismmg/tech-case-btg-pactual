@@ -4,6 +4,7 @@ alembic==1.14.0
 anyio==4.13.0
 bcrypt==4.0.1
 click==8.3.3
+email-validator==2.2.0
 fastapi==0.136.1
 h11==0.16.0
 httpx==0.28.1
