@@ -32,13 +32,23 @@ def create_author(author: AuthorCreate, db: Session = Depends(get_db)) -> Author
             detail=e.message
         )
 
-@router.get("/", response_model=PaginatedResponse[AuthorResponse], status_code=status.HTTP_200_OK)
+@router.get(
+    "/",
+    response_model=PaginatedResponse[AuthorResponse],
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(rate_limit(limit=60))],
+)
 def get_authors(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[AuthorResponse]:
     authors, total = author_service.list_authors(db, skip, limit)
     author_responses = [AuthorResponse.model_validate(author) for author in authors]
     return PaginatedResponse(items=author_responses, total=total, skip=skip, limit=limit)
 
-@router.get("/{author_id}", response_model=AuthorResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{author_id}",
+    response_model=AuthorResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(rate_limit(limit=120))],
+)
 def get_author(author_id: int, db: Session = Depends(get_db)) -> AuthorResponse:
     try:
         return author_service.get_author(db, author_id)
