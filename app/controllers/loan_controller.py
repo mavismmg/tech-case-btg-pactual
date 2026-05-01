@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from typing import Sequence
 from app.dependencies import get_db
 from app.dependencies import require_roles
 from app.core.rate_limit import rate_limit
 from app.models.account import AccountRole
+from app.models.loan import LoanStatus
 from app.schemas.loan import LoanResponse
 from app.schemas.common import PaginatedResponse
 from app.services import loan_service
@@ -47,11 +47,43 @@ def create_loan(user_id: int, book_id: int, db: Session = Depends(get_db)) -> Lo
             detail="An error occurred while creating the loan."
         )
 
-@router.get("/", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
-def list_loans(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[LoanResponse]:
-    loans, total = loan_service.list_loans(db, skip, limit)
+def _loan_page(loans, total: int, skip: int, limit: int) -> PaginatedResponse[LoanResponse]:
     loan_responses = [LoanResponse.model_validate(loan) for loan in loans]
     return PaginatedResponse(items=loan_responses, total=total, skip=skip, limit=limit)
+
+
+@router.get("/", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
+def list_loans(
+    status_filter: LoanStatus | None = Query(None, alias="status"),
+    user_id: int | None = Query(None, gt=0),
+    overdue: bool | None = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[LoanResponse]:
+    loans, total = loan_service.list_loans(db, skip, limit, status_filter, user_id, overdue)
+    return _loan_page(loans, total, skip, limit)
+
+
+@router.get("/active", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
+def list_active_loans(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[LoanResponse]:
+    loans, total = loan_service.list_active_loans(db, skip, limit)
+    return _loan_page(loans, total, skip, limit)
+
+
+@router.get("/overdue", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
+def list_overdue_loans(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[LoanResponse]:
+    loans, total = loan_service.list_overdue_loans(db, skip, limit)
+    return _loan_page(loans, total, skip, limit)
+
 
 @router.get("/{loan_id}", response_model=LoanResponse, status_code=status.HTTP_200_OK)
 def get_loan(loan_id: int, db: Session = Depends(get_db)) -> LoanResponse:
