@@ -565,15 +565,30 @@ O registro dessas métricas é best effort: se a gravação da métrica falhar, 
 
 ## Banco de Dados e Inicialização
 
-O projeto atual não usa Alembic ou migrations formais.
+O schema do banco é versionado com Alembic. Em runtime, a aplicação não executa `Base.metadata.create_all`; as tabelas, índices e constraints são criados por migrations.
 
-Na inicialização da API, `app/server.py` executa:
+A migration inicial está em:
 
-```python
-Base.metadata.create_all(bind=engine)
+```text
+alembic/versions/0001_initial_schema.py
 ```
 
-Também há ajustes específicos para PostgreSQL, como criação de índices parciais e colunas necessárias ao modelo atual. Para o escopo do case, mantive essa abordagem para facilitar a execução local. Em um ambiente produtivo, o caminho natural seria versionar o schema com Alembic.
+Ela cria o schema atual completo, incluindo os índices parciais usados nas regras de domínio:
+
+- email ativo único em `users`;
+- empréstimo ativo único por usuário/livro em `loans`;
+- índices de solicitações pendentes em `loan_requests`;
+- índices de leitura operacional em `loan_operation_metrics`.
+
+Para rodar migrations manualmente:
+
+```bash
+make migrate
+```
+
+No Docker Compose, a API executa `alembic upgrade head` antes de iniciar o Uvicorn. Os testes continuam usando `Base.metadata.create_all/drop_all` nas fixtures para manter a suíte rápida e isolada.
+
+Para facilitar a reprodução, o fluxo local foi pensado para um banco novo, criado a partir das migrations. Isso evita passos manuais. Em um ambiente de producao, a estratégia seria diferente: as migrations seriam planejadas de forma incremental, com validação de compatibilidade, backup, rollback e execução controlada sobre dados existentes.
 
 ## Como Rodar Localmente
 
@@ -604,6 +619,8 @@ LOG_PRETTY_JSON=true
 make start
 ```
 
+O container da API aplica as migrations antes de iniciar o servidor.
+
 A API ficará disponível em:
 
 ```text
@@ -628,13 +645,52 @@ make db
 make local
 ```
 
-Esse comando cria o ambiente virtual, instala as dependências e inicia o Uvicorn.
+Esse comando cria o ambiente virtual, instala as dependências, aplica as migrations e inicia o Uvicorn.
 
 Caso as dependências já estejam instaladas:
 
 ```bash
 make local-soft
 ```
+
+Também é possível aplicar apenas as migrations:
+
+```bash
+make migrate
+```
+
+Para criar uma nova migration depois de alterar models:
+
+```bash
+make revision m="descricao_da_migration"
+```
+
+### Dados de Exemplo
+
+As migrations criam apenas estrutura de banco. Para facilitar testes manuais em ambiente local, existe um seed opcional:
+
+```bash
+make seed
+```
+
+Esse comando aplica as migrations e cria dados mínimos de demonstração de forma idempotente:
+
+- conta `admin`;
+- conta `librarian`;
+- usuário da biblioteca;
+- conta `reader` vinculada ao usuário;
+- autores;
+- livros disponíveis para empréstimo.
+
+Credenciais locais criadas pelo seed:
+
+| Perfil | Email | Senha |
+| --- | --- | --- |
+| `admin` | `admin@example.com` | `strong-password` |
+| `librarian` | `librarian@example.com` | `strong-password` |
+| `reader` | `reader-account@example.com` | `strong-password` |
+
+O seed não faz parte das migrations e não é executado automaticamente. A ideia é manter schema e dados de desenvolvimento separados.
 
 ### Parar Containers
 
@@ -930,7 +986,7 @@ Ela cobre o fluxo que eu usaria para avaliar rapidamente a API: bootstrap, login
 - **Camadas explícitas**: controllers, services e repositories deixam o fluxo mais fácil de revisar e testar.
 - **`Account` separado de `User`**: separa credenciais de acesso dos dados do leitor da biblioteca.
 - **Role `reader` para usuário comum**: no enunciado esse papel aparece como `user`; usei `reader` para não confundir a role com a entidade `User`.
-- **`create_all` em vez de Alembic**: simplifica o setup local do case. Para produção, eu migraria para Alembic.
+- **Alembic para schema**: o banco da aplicação é criado por migrations versionadas; `create_all` fica restrito aos testes.
 - **Cache com TTL curto**: melhora leituras frequentes sem exigir uma política pesada de invalidação.
 - **Locks Redis no empréstimo**: reduzem o risco de concorrência ao tentar emprestar o mesmo livro ou atingir o limite de um usuário.
 - **Catálogo sem update bibliográfico**: livros podem ser removidos logicamente, mas ISBN/título/autor não são editados por endpoint público para preservar histórico de empréstimos.
@@ -940,7 +996,6 @@ Ela cobre o fluxo que eu usaria para avaliar rapidamente a API: bootstrap, login
 
 ## Melhorias Futuras
 
-- Adicionar Alembic para versionamento formal do schema.
 - Evoluir métricas para Prometheus/Grafana, com dashboards e alertas.
 - Implementar notificações de vencimento por email ou webhook.
 - Padronizar completamente a nomenclatura pública entre `reader` e `user`, se desejado.
