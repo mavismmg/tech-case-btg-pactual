@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 AVAILABLE_COUNT_CACHE_KEY = "books:available_count:{isbn}"
 AVAILABLE_EXEMPLARS_CACHE_KEY = "books:available_exemplars:{isbn}"
+BOOK_LIST_CACHE_KEY = "books:list:{skip}:{limit}"
+BOOK_DETAIL_CACHE_KEY = "books:detail:{book_id}"
+BOOK_LIST_CACHE_PREFIX = "books:list:"
 BOOK_CACHE_TTL_SECONDS = 60
 
 class BookNotFoundError(Exception):
@@ -38,11 +41,23 @@ def _available_exemplars_cache_key(isbn: str) -> str:
     return AVAILABLE_EXEMPLARS_CACHE_KEY.format(isbn=isbn)
 
 
+def _book_list_cache_key(skip: int, limit: int) -> str:
+    return BOOK_LIST_CACHE_KEY.format(skip=skip, limit=limit)
+
+
+def _book_detail_cache_key(book_id: int) -> str:
+    return BOOK_DETAIL_CACHE_KEY.format(book_id=book_id)
+
+
 def invalidate_available_exemplars_cache(isbn: str) -> None:
     cache.delete_keys(
         _available_count_cache_key(isbn),
         _available_exemplars_cache_key(isbn),
     )
+
+
+def invalidate_book_list_cache() -> None:
+    cache.delete_by_prefix(BOOK_LIST_CACHE_PREFIX)
 
 
 def _serialize_datetime(value: datetime | None) -> str | None:
@@ -138,6 +153,7 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
     try:
         new_book = book_repository.create_book(db, book_data)
         invalidate_available_exemplars_cache(new_book.isbn)
+        invalidate_book_list_cache()
         logger.info(
             "Book created successfully",
             extra={"operation": operation, "book_id": new_book.id, "author_id": new_book.author_id, "isbn": new_book.isbn},
@@ -157,11 +173,27 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 
 def list_books(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Book], int]:
     logger.debug("Listing books", extra={"operation": "list_books", "skip": skip, "limit": limit})
-    
-    return book_repository.get_books(db, skip, limit)
+
+    cache_key = _book_list_cache_key(skip, limit)
+    cached_books = cache.get_json(cache_key)
+    if cached_books is not None:
+        return [_deserialize_book(book) for book in cached_books["items"]], int(cached_books["total"])
+
+    books, total = book_repository.get_books(db, skip, limit)
+    cache.set_json(
+        cache_key,
+        {"items": [_serialize_book(book) for book in books], "total": total},
+        BOOK_CACHE_TTL_SECONDS,
+    )
+    return books, total
 
 def get_book(db: Session, book_id: int) -> Book:
     logger.debug("Fetching book by ID", extra={"operation": "get_book", "book_id": book_id})
+
+    cache_key = _book_detail_cache_key(book_id)
+    cached_book = cache.get_json(cache_key)
+    if cached_book is not None:
+        return _deserialize_book(cached_book)
 
     book = book_repository.get_book_by_id(db, book_id)
 
@@ -172,7 +204,8 @@ def get_book(db: Session, book_id: int) -> Book:
         )
 
         raise BookNotFoundError(book_id)
-    
+
+    cache.set_json(cache_key, _serialize_book(book), BOOK_CACHE_TTL_SECONDS)
     return book
 
 def count_available_exemplars(db: Session, isbn: str) -> int:
