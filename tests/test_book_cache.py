@@ -3,7 +3,7 @@ from datetime import date
 from app.schemas.author import AuthorCreate
 from app.schemas.book import BookCreate
 from app.schemas.user import UserCreate
-from app.services import book_service
+from app.services import author_service, book_service
 from app.services.author_service import create_author
 from app.services.book_service import create_book
 from app.services.loan_service import create_loan, return_loan
@@ -24,6 +24,12 @@ class FakeCache:
     def delete_keys(self, *keys):
         self.deleted_keys.extend(keys)
         for key in keys:
+            self.values.pop(key, None)
+
+    def delete_by_prefix(self, prefix):
+        deleted_keys = [key for key in self.values if key.startswith(prefix)]
+        self.deleted_keys.extend(deleted_keys)
+        for key in deleted_keys:
             self.values.pop(key, None)
 
 
@@ -107,3 +113,104 @@ def test_available_exemplars_cache_is_invalidated_on_loan_lifecycle(db, monkeypa
     assert count_key not in fake_cache.values
     assert exemplars_key not in fake_cache.values
     assert book_service.count_available_exemplars(db, book.isbn) == 1
+
+
+def test_list_books_uses_cache(db, monkeypatch):
+    fake_cache = FakeCache()
+    monkeypatch.setattr(book_service, "cache", fake_cache)
+
+    author = create_author(db, AuthorCreate(name="Book List Cache Author"))
+    create_book(
+        db,
+        BookCreate(
+            isbn="1234567890",
+            author_id=author.id,
+            title="Book List Cache Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+
+    books, total = book_service.list_books(db)
+    assert len(books) == 1
+    assert total == 1
+
+    def fail_on_cache_hit(db, skip, limit):
+        raise AssertionError("repository should not be called on cache hit")
+
+    monkeypatch.setattr(book_service.book_repository, "get_books", fail_on_cache_hit)
+
+    cached_books, cached_total = book_service.list_books(db)
+    assert len(cached_books) == 1
+    assert cached_total == 1
+
+
+def test_get_book_uses_cache(db, monkeypatch):
+    fake_cache = FakeCache()
+    monkeypatch.setattr(book_service, "cache", fake_cache)
+
+    author = create_author(db, AuthorCreate(name="Book Detail Cache Author"))
+    book = create_book(
+        db,
+        BookCreate(
+            isbn="1234567890",
+            author_id=author.id,
+            title="Book Detail Cache Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+
+    assert book_service.get_book(db, book.id).id == book.id
+
+    def fail_on_cache_hit(db, book_id):
+        raise AssertionError("repository should not be called on cache hit")
+
+    monkeypatch.setattr(book_service.book_repository, "get_book_by_id", fail_on_cache_hit)
+
+    cached_book = book_service.get_book(db, book.id)
+    assert cached_book.id == book.id
+
+
+def test_book_creation_invalidates_book_list_cache(db, monkeypatch):
+    fake_cache = FakeCache()
+    monkeypatch.setattr(book_service, "cache", fake_cache)
+
+    author = create_author(db, AuthorCreate(name="Book List Invalidation Author"))
+    fake_cache.values[book_service._book_list_cache_key(0, 100)] = {"items": [], "total": 0}
+
+    create_book(
+        db,
+        BookCreate(
+            isbn="1234567890",
+            author_id=author.id,
+            title="Book List Invalidation Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+
+    assert book_service._book_list_cache_key(0, 100) not in fake_cache.values
+    assert book_service._book_list_cache_key(0, 100) in fake_cache.deleted_keys
+
+
+def test_list_authors_uses_cache_and_create_author_invalidates_list(db, monkeypatch):
+    fake_cache = FakeCache()
+    monkeypatch.setattr(author_service, "cache", fake_cache)
+
+    create_author(db, AuthorCreate(name="Author Cache One"))
+
+    authors, total = author_service.list_authors(db)
+    assert len(authors) == 1
+    assert total == 1
+
+    def fail_on_cache_hit(db, skip, limit):
+        raise AssertionError("repository should not be called on cache hit")
+
+    monkeypatch.setattr(author_service.author_repository, "get_authors", fail_on_cache_hit)
+
+    cached_authors, cached_total = author_service.list_authors(db)
+    assert len(cached_authors) == 1
+    assert cached_total == 1
+
+    create_author(db, AuthorCreate(name="Author Cache Two"))
+
+    assert author_service._author_list_cache_key(0, 100) not in fake_cache.values
+    assert author_service._author_list_cache_key(0, 100) in fake_cache.deleted_keys
