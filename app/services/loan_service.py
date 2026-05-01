@@ -63,6 +63,8 @@ BUSINESS_RULE_EXCEPTIONS = (
     LoanRenewalNotAllowedError,
 )
 
+FINE_VALUE_PER_OVERDUE_DAY = 2.0
+
 
 def _loan_user_lock_key(user_id: int) -> str:
     return f"loans:create:user:{user_id}"
@@ -70,6 +72,21 @@ def _loan_user_lock_key(user_id: int) -> str:
 
 def _loan_book_lock_key(book_id: int) -> str:
     return f"loans:create:book:{book_id}"
+
+
+def _calculate_overdue_days(expected_return_date: datetime, actual_return_date: datetime) -> int:
+    if expected_return_date.tzinfo is None:
+        expected_return_date = expected_return_date.replace(tzinfo=timezone.utc)
+
+    if actual_return_date.tzinfo is None:
+        actual_return_date = actual_return_date.replace(tzinfo=timezone.utc)
+
+    # timedelta.days intencionalmente conta apenas os dias completos de atraso; dias parciais não são arredondados para cima.
+    return max(0, (actual_return_date - expected_return_date).days)
+
+
+def _calculate_fine_value(days_overdue: int) -> float:
+    return days_overdue * FINE_VALUE_PER_OVERDUE_DAY
 
 
 @contextmanager
@@ -221,8 +238,8 @@ def return_loan(db: Session, loan_id: int) -> Loan:
                 raise LoanAlreadyReturnedError(loan_id)
             
             now = datetime.now(timezone.utc)
-            days_overdue = max(0, (now - loan.expected_return_date).days)
-            loan.fine_value = days_overdue * 2.0
+            days_overdue = _calculate_overdue_days(loan.expected_return_date, now)
+            loan.fine_value = _calculate_fine_value(days_overdue)
             loan.actual_return_date = now
             loan.status = LoanStatus.RETURNED
             
