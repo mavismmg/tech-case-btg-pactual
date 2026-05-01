@@ -9,6 +9,8 @@ from app.services.user_service import create_user
 from app.services.author_service import create_author
 from app.services.book_service import create_book
 from app.services.loan_service import (
+    _calculate_fine_value,
+    _calculate_overdue_days,
     create_loan,
     list_active_loans,
     list_loans,
@@ -23,6 +25,26 @@ from app.schemas.book import BookCreate
 class LoanStatusMock(str, Enum):
     ACTIVE = "active"
     RETURNED = "returned"
+
+
+def test_calculate_fine_uses_only_full_overdue_days():
+    actual_return_date = datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
+
+    assert _calculate_overdue_days(actual_return_date, actual_return_date) == 0
+    assert _calculate_fine_value(0) == 0.0
+
+    one_day_late = actual_return_date - timedelta(days=1)
+    assert _calculate_overdue_days(one_day_late, actual_return_date) == 1
+    assert _calculate_fine_value(1) == 2.0
+
+    partial_day_late = actual_return_date - timedelta(hours=23, minutes=59)
+    assert _calculate_overdue_days(partial_day_late, actual_return_date) == 0
+    assert _calculate_fine_value(0) == 0.0
+
+    fourteen_days_and_two_hours_late = actual_return_date - timedelta(days=14, hours=2)
+    assert _calculate_overdue_days(fourteen_days_and_two_hours_late, actual_return_date) == 14
+    assert _calculate_fine_value(14) == 28.0
+
 
 def test_create_loan(db, caplog):
     user_data = UserCreate(name="Test User", email="test@example.com")
