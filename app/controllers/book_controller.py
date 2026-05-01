@@ -1,6 +1,7 @@
+from collections.abc import Sequence
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Sequence
 from app.dependencies import get_db
 from app.dependencies import require_roles
 from app.core.rate_limit import rate_limit

@@ -32,20 +32,18 @@ staff_only = Depends(require_roles(AccountRole.ADMIN, AccountRole.LIBRARIAN))
 
 
 def _raise_request_error(exc: Exception) -> NoReturn:
-    if isinstance(exc, (LoanRequestBookNotFoundError, LoanRequestLoanNotFoundError, LoanRequestNotFoundError)):
+    if isinstance(exc, LoanRequestBookNotFoundError | LoanRequestLoanNotFoundError | LoanRequestNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message)
 
-    if isinstance(exc, (ReaderAccountRequiredError, ReaderAccountMissingUserError)):
+    if isinstance(exc, ReaderAccountRequiredError | ReaderAccountMissingUserError):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message)
 
     if isinstance(
         exc,
-        (
-            DuplicatePendingLoanRequestError,
-            LoanRequestAlreadyReviewedError,
-            LoanRequestApprovalError,
-            LoanRequestOwnershipError,
-        ),
+        DuplicatePendingLoanRequestError
+        | LoanRequestAlreadyReviewedError
+        | LoanRequestApprovalError
+        | LoanRequestOwnershipError,
     ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message)
 

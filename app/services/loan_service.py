@@ -81,7 +81,7 @@ def _calculate_overdue_days(expected_return_date: datetime, actual_return_date: 
     if actual_return_date.tzinfo is None:
         actual_return_date = actual_return_date.replace(tzinfo=timezone.utc)
 
-    # timedelta.days intencionalmente conta apenas os dias completos de atraso; dias parciais não são arredondados para cima.
+    # timedelta.days intencionalmente conta apenas dias completos; dias parciais não arredondam para cima.
     return max(0, (actual_return_date - expected_return_date).days)
 
 

@@ -1,4 +1,3 @@
-from typing import Sequence
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.dependencies import get_db
@@ -80,12 +79,17 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
         )
 
 @router.get("/{user_id}/loans", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
-def get_user_loans(user_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[LoanResponse]:
+def get_user_loans(
+    user_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[LoanResponse]:
     try:
         loans, total = loan_service.get_loans_by_user(db, user_id, skip, limit)
         loan_responses = [LoanResponse.model_validate(loan) for loan in loans]
         return PaginatedResponse(items=loan_responses, total=total, skip=skip, limit=limit)
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching user loans."

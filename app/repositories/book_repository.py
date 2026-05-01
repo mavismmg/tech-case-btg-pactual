@@ -54,9 +54,9 @@ def get_book_by_id(db: Session, book_id: int) -> Book | None:
 def count_exemplars_by_isbn(db: Session, isbn: str) -> int:
     logger.info(f"Counting exemplars for ISBN: {isbn}")
 
-    return db.query(Book).filter(Book.isbn == isbn, Book.is_available == True).count()
+    return db.query(Book).filter(Book.isbn == isbn, Book.is_available.is_(True)).count()
 
 def get_exemplars_by_isbn(db: Session, isbn: str) -> list[Book]:
     logger.info(f"Fetching exemplars for ISBN: {isbn}")
 
-    return db.query(Book).options(joinedload(Book.author)).filter(Book.isbn == isbn, Book.is_available == True).all()
+    return db.query(Book).options(joinedload(Book.author)).filter(Book.isbn == isbn, Book.is_available.is_(True)).all()

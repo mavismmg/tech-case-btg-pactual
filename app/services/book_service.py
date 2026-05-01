@@ -156,7 +156,12 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
         invalidate_book_list_cache()
         logger.info(
             "Book created successfully",
-            extra={"operation": operation, "book_id": new_book.id, "author_id": new_book.author_id, "isbn": new_book.isbn},
+            extra={
+                "operation": operation,
+                "book_id": new_book.id,
+                "author_id": new_book.author_id,
+                "isbn": new_book.isbn,
+            },
         )
 
         return new_book

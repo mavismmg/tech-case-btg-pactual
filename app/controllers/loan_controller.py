@@ -5,10 +5,17 @@ from app.dependencies import require_roles
 from app.core.rate_limit import rate_limit
 from app.models.account import AccountRole
 from app.models.loan import LoanStatus
-from app.schemas.loan import LoanResponse
 from app.schemas.common import PaginatedResponse
+from app.schemas.loan import LoanResponse
 from app.services import loan_service
-from app.services.loan_service import LoanNotFoundError, LoanBookNotFoundError, LoanBookIsNotAvailableError, LoanLimitExceededError, LoanUserNotFoundError, LoanAlreadyReturnedError 
+from app.services.loan_service import (
+    LoanAlreadyReturnedError,
+    LoanBookIsNotAvailableError,
+    LoanBookNotFoundError,
+    LoanLimitExceededError,
+    LoanNotFoundError,
+    LoanUserNotFoundError,
+)
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
 librarian_or_admin = Depends(require_roles(AccountRole.ADMIN, AccountRole.LIBRARIAN))
@@ -41,7 +48,7 @@ def create_loan(user_id: int, book_id: int, db: Session = Depends(get_db)) -> Lo
             detail=e.message
         )
         
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while creating the loan."
@@ -114,7 +121,7 @@ def return_loan(loan_id: int, db: Session = Depends(get_db)) -> LoanResponse:
             status_code=status.HTTP_409_CONFLICT,
             detail=e.message
         )
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while returning the loan."
