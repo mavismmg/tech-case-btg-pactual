@@ -14,6 +14,14 @@ def create_metric(db: Session, metric: LoanOperationMetric) -> LoanOperationMetr
     return metric
 
 
+def list_metrics(db: Session) -> list[LoanOperationMetric]:
+    return (
+        db.query(LoanOperationMetric)
+        .order_by(LoanOperationMetric.created_at, LoanOperationMetric.id)
+        .all()
+    )
+
+
 def count_loans_by_status(db: Session, status: LoanStatus) -> int:
     return db.query(Loan).filter(Loan.status == status.value).count()
 

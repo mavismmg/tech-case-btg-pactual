@@ -1,4 +1,7 @@
 import logging
+from csv import DictWriter
+from io import StringIO
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -8,6 +11,33 @@ from app.repositories import loan_operation_metric_repository
 from app.schemas.loan_operation_metric import LoanMetricsSummaryResponse
 
 logger = logging.getLogger(__name__)
+
+CSV_FIELDS = [
+    "id",
+    "operation",
+    "loan_id",
+    "loan_request_id",
+    "user_id",
+    "book_id",
+    "account_id",
+    "reviewer_account_id",
+    "fine_value",
+    "created_at",
+]
+
+
+def _serialize_csv_datetime(value: datetime) -> str:
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def _serialize_csv_value(value) -> str | int | float:
+    if value is None:
+        return ""
+
+    if isinstance(value, datetime):
+        return _serialize_csv_datetime(value)
+
+    return value
 
 
 def record_loan_operation(
@@ -63,3 +93,20 @@ def get_loan_metrics_summary(db: Session) -> LoanMetricsSummaryResponse:
         total_fine_value=loan_operation_metric_repository.sum_returned_fines(db),
         events_by_operation=loan_operation_metric_repository.count_events_by_operation(db),
     )
+
+
+def export_loan_operation_metrics_csv(db: Session) -> str:
+    metrics = loan_operation_metric_repository.list_metrics(db)
+    output = StringIO()
+    writer = DictWriter(output, fieldnames=CSV_FIELDS)
+    writer.writeheader()
+
+    for metric in metrics:
+        writer.writerow(
+            {
+                field: _serialize_csv_value(getattr(metric, field))
+                for field in CSV_FIELDS
+            }
+        )
+
+    return output.getvalue()
