@@ -6,7 +6,7 @@ PYTEST=$(VENV_DIR)/bin/pytest
 RUFF=$(VENV_DIR)/bin/ruff
 ALEMBIC=$(VENV_DIR)/bin/alembic
 
-.PHONY: install start db test_db stop local local-soft migrate revision seed format lint lint-fix test coverage check
+.PHONY: install start db test_db stop local local-soft migrate revision seed format lint lint-fix test coverage check frontend-install frontend dev
 
 install:
 	$(PYTHON) -m venv $(VENV_DIR)
@@ -54,5 +54,14 @@ test:
 
 coverage:
 	$(PYTEST) --cov=app --cov-report=term-missing
+
+frontend-install:
+	npm --prefix frontend install
+
+frontend:
+	npm --prefix frontend run dev
+
+dev:
+	$(UVICORN) app.server:app --reload --host 0.0.0.0 --port 8000 & npm --prefix frontend run dev
 
 check: lint test

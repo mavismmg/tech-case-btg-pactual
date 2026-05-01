@@ -13,7 +13,9 @@ def test_bootstrap_login_me_and_bootstrap_reuse(client):
         json={"email": "admin@example.com", "password": "strong-password"},
     )
     assert login_response.status_code == 200
-    token = login_response.json()["access_token"]
+    login_body = login_response.json()
+    token = login_body["access_token"]
+    assert set(login_body["account"].keys()) == {"id", "name", "email", "role"}
 
     me_response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me_response.status_code == 200

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_account, get_db
 from app.models.account import Account
-from app.schemas.account import AccountBootstrap, AccountLogin, AccountResponse, TokenResponse
+from app.schemas.account import AccountAuthResponse, AccountBootstrap, AccountLogin, AccountResponse, TokenResponse
 from app.services import account_service
 from app.services.account_service import (
     BootstrapAlreadyUsedError,
@@ -51,7 +51,7 @@ def login(login_data: AccountLogin, db: Session = Depends(get_db)) -> TokenRespo
     return TokenResponse(
         access_token=token,
         expires_in=expires_in,
-        account=AccountResponse.model_validate(account),
+        account=AccountAuthResponse.model_validate(account),
     )
 
 

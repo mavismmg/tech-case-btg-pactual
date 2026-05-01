@@ -70,6 +70,7 @@ No desenho atual, o domínio foi dividido em:
 - Cache Redis para consultas frequentes.
 - Rate limiting por rota e identidade do cliente.
 - Notificações de vencimento por endpoint manual, email fake e webhook HTTP configurável.
+- Frontend React básico e responsivo conectado à API.
 - Logging estruturado em JSON.
 - Health check com verificação básica de banco e Redis.
 - Métricas operacionais de empréstimos registradas no PostgreSQL.
@@ -88,6 +89,7 @@ No desenho atual, o domínio foi dividido em:
 | Pydantic | Schemas e validações | Define contratos claros de entrada e saída. |
 | Redis | Cache, rate limit e locks | Usado para acelerar consultas e reduzir riscos em operações concorrentes. |
 | Docker Compose | Ambiente local | Sobe API, banco e Redis com poucos comandos. |
+| React + Vite | Frontend | Interface leve para demonstrar os fluxos principais do case. |
 | Pytest | Testes | Cobre regras de negócio, autenticação, cache, rate limit e fluxos HTTP. |
 | JWT | Autenticação | Protege os endpoints sem manter sessão no servidor. |
 
@@ -158,6 +160,7 @@ app/
   services/        # Regras de negócio
   dependencies.py  # Dependências compartilhadas do FastAPI
   server.py        # Criação da aplicação e inclusão de routers
+frontend/          # Aplicação React/Vite conectada à API
 tests/             # Testes unitários e funcionais
 docker-compose.yml # PostgreSQL, Redis, banco de teste e API
 Dockerfile         # Imagem da API
@@ -438,6 +441,12 @@ Fluxo principal:
 Authorization: Bearer <access_token>
 ```
 
+A resposta de `POST /auth/login` retorna o token no body por simplicidade do case e para facilitar testes via Swagger/cURL. Em produção, especialmente em aplicações web, uma alternativa mais segura seria usar cookies `HttpOnly`, `Secure` e `SameSite`.
+
+O objeto `account` retornado no login expõe apenas dados essenciais para a interface (`id`, `name`, `email` e `role`). Campos internos como vínculo com usuário, status e datas de auditoria não são enviados nessa resposta para reduzir exposição desnecessária. As autorizações no backend continuam sendo validadas pelo JWT e pela conta carregada no servidor.
+
+O endpoint `GET /auth/me` ainda retorna o vínculo interno `user_id` porque o frontend atual usa esse campo para montar a área "Meu Espaço" do leitor e listar seus empréstimos. A evolução mais segura seria criar um endpoint orientado ao usuário autenticado, como `GET /me/loans` ou `GET /auth/me/loans`, para que o backend resolva esse vínculo a partir do token e o frontend não precise receber `user_id`. Depois disso, `/auth/me` também poderia ser reduzido para o mesmo formato mínimo usado no login.
+
 Roles:
 
 | Role | Responsabilidade |
@@ -660,6 +669,7 @@ JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 RATE_LIMIT_ENABLED=true
 LOG_PRETTY_JSON=true
+CORS_ORIGINS=http://localhost:5173
 DUE_LOAN_NOTIFICATIONS_ENABLED=false
 DUE_LOAN_NOTIFICATION_INTERVAL_SECONDS=3600
 DUE_LOAN_NOTIFICATION_DAYS_AHEAD=1
@@ -679,6 +689,35 @@ A API ficará disponível em:
 ```text
 http://localhost:8000
 ```
+
+### Rodar Frontend React
+
+O frontend fica em `frontend/` e usa Vite. Ele lê a URL da API por `VITE_API_URL`, com padrão local:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+Instale as dependências e inicie a interface:
+
+```bash
+make frontend-install
+make frontend
+```
+
+A interface ficará disponível em:
+
+```text
+http://localhost:5173
+```
+
+Para o navegador conseguir chamar a API, o backend libera CORS para `http://localhost:5173` por padrão. Caso use outra origem, ajuste:
+
+```env
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+```
+
+O frontend implementa uma console operacional simples: login, dashboard, catálogo, usuários, empréstimos, solicitações, métricas e notificações. Ele foi pensado principalmente para mostrar a API funcionando em fluxos reais, facilitar a avaliação manual e dar contexto visual aos endpoints. Alguns pontos de UX, responsividade e acabamento ainda poderiam evoluir em um produto final; a prioridade deste case continuou sendo a API, suas regras de negócio, segurança básica, testes e organização backend.
 
 Documentação Swagger/OpenAPI:
 

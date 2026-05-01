@@ -46,8 +46,17 @@ class AccountResponse(BaseModel):
         return value.isoformat().replace("+00:00", "Z")
 
 
+class AccountAuthResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    role: AccountRole
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
-    account: AccountResponse
+    account: AccountAuthResponse
