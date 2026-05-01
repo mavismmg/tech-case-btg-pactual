@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import app.core.rate_limit as rate_limit_module
 from app.models.account import AccountRole
+from app.models.loan import Loan
 from app.schemas.account import AccountCreate
 from app.services.account_service import create_account
 
@@ -147,6 +148,95 @@ def test_auth_flow_create_and_return_loan(client):
     assert return_response.json()["status"] == "returned"
 
 
+def test_list_active_and_overdue_loans_endpoints(client, db):
+    _bootstrap_admin(client)
+    token = _login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    user_response = client.post(
+        "/users/",
+        json={"name": "Reader", "email": "reader@example.com"},
+        headers=headers,
+    )
+    assert user_response.status_code == 201
+    user_id = user_response.json()["id"]
+
+    author_response = client.post(
+        "/authors/",
+        json={"name": "Loan Filter Author"},
+        headers=headers,
+    )
+    assert author_response.status_code == 201
+    author_id = author_response.json()["id"]
+
+    active_book_response = client.post(
+        "/books/",
+        json={
+            "isbn": "1234567890",
+            "author_id": author_id,
+            "title": "Active Loan Book",
+            "published_date": "2023-01-01",
+        },
+        headers=headers,
+    )
+    assert active_book_response.status_code == 201
+
+    overdue_book_response = client.post(
+        "/books/",
+        json={
+            "isbn": "1234567891",
+            "author_id": author_id,
+            "title": "Overdue Loan Book",
+            "published_date": "2023-01-01",
+        },
+        headers=headers,
+    )
+    assert overdue_book_response.status_code == 201
+
+    active_loan_response = client.post(
+        "/loans/",
+        params={"user_id": user_id, "book_id": active_book_response.json()["id"]},
+        headers=headers,
+    )
+    assert active_loan_response.status_code == 201
+
+    overdue_loan_response = client.post(
+        "/loans/",
+        params={"user_id": user_id, "book_id": overdue_book_response.json()["id"]},
+        headers=headers,
+    )
+    assert overdue_loan_response.status_code == 201
+    overdue_loan_id = overdue_loan_response.json()["id"]
+
+    overdue_loan = db.query(Loan).filter(Loan.id == overdue_loan_id).first()
+    assert overdue_loan is not None
+    overdue_loan.expected_return_date = datetime.now(timezone.utc) - timedelta(days=1)
+    db.commit()
+
+    active_response = client.get("/loans/active?skip=0&limit=100", headers=headers)
+    assert active_response.status_code == 200
+    assert active_response.json()["total"] == 2
+
+    overdue_response = client.get("/loans/overdue?skip=0&limit=100", headers=headers)
+    assert overdue_response.status_code == 200
+    assert overdue_response.json()["total"] == 1
+    assert overdue_response.json()["items"][0]["id"] == overdue_loan_id
+
+    filtered_response = client.get(f"/loans/?status=active&user_id={user_id}&overdue=true", headers=headers)
+    assert filtered_response.status_code == 200
+    assert filtered_response.json()["total"] == 1
+    assert filtered_response.json()["items"][0]["id"] == overdue_loan_id
+
+
+def test_health_check_returns_service_status(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["status"] in {"ok", "degraded"}
+    assert response.json()["database"] in {"ok", "unavailable"}
+    assert response.json()["redis"] in {"ok", "unavailable", "disabled"}
+
+
 def test_reader_can_request_loan_but_staff_must_approve(client):
     _bootstrap_admin(client)
     admin_token = _login(client)
@@ -230,6 +320,85 @@ def test_reader_can_request_loan_but_staff_must_approve(client):
     assert loans_response.status_code == 200
     assert loans_response.json()["total"] == 1
     assert loans_response.json()["items"][0]["status"] == "active"
+
+
+def test_loan_request_rate_limit_returns_429(client, monkeypatch):
+    _bootstrap_admin(client)
+    admin_token = _login(client)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    user_response = client.post(
+        "/users/",
+        json={"name": "Reader", "email": "reader@example.com"},
+        headers=admin_headers,
+    )
+    assert user_response.status_code == 201
+
+    reader_account_response = client.post(
+        "/accounts/",
+        json={
+            "name": "Reader Account",
+            "email": "reader-account@example.com",
+            "password": "strong-password",
+            "role": "reader",
+            "user_id": user_response.json()["id"],
+        },
+        headers=admin_headers,
+    )
+    assert reader_account_response.status_code == 201
+
+    reader_token = _login(client, "reader-account@example.com")
+    reader_headers = {"Authorization": f"Bearer {reader_token}"}
+
+    fake_redis = FakeRedis()
+    monkeypatch.setattr(rate_limit_module, "RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(rate_limit_module, "get_redis_client", lambda: fake_redis)
+
+    for _ in range(10):
+        response = client.post("/loan-requests/", json={"book_id": 999}, headers=reader_headers)
+        assert response.status_code == 404
+
+    blocked_response = client.post("/loan-requests/", json={"book_id": 999}, headers=reader_headers)
+
+    assert blocked_response.status_code == 429
+    assert blocked_response.headers["Retry-After"] == "60"
+
+
+def test_account_creation_rate_limit_returns_429(client, monkeypatch):
+    _bootstrap_admin(client)
+    admin_token = _login(client)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    fake_redis = FakeRedis()
+    monkeypatch.setattr(rate_limit_module, "RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(rate_limit_module, "get_redis_client", lambda: fake_redis)
+
+    for _ in range(10):
+        response = client.post(
+            "/accounts/",
+            json={
+                "name": "Librarian",
+                "email": "librarian@example.com",
+                "password": "strong-password",
+                "role": "librarian",
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code in {201, 409}
+
+    blocked_response = client.post(
+        "/accounts/",
+        json={
+            "name": "Librarian",
+            "email": "librarian@example.com",
+            "password": "strong-password",
+            "role": "librarian",
+        },
+        headers=admin_headers,
+    )
+
+    assert blocked_response.status_code == 429
+    assert blocked_response.headers["Retry-After"] == "60"
 
 
 def test_login_invalid_credentials_returns_401(client):
