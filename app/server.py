@@ -15,6 +15,7 @@ from app.controllers import author_controller
 from app.controllers import auth_controller
 from app.controllers import account_controller
 from app.controllers import loan_request_controller
+from app.controllers import health_controller
 
 app = FastAPI(title="Library API")
 
@@ -73,6 +74,7 @@ if engine.dialect.name == "postgresql":
         )
 
 app.include_router(auth_controller.router)
+app.include_router(health_controller.router)
 app.include_router(account_controller.router)
 app.include_router(user_controller.router)
 app.include_router(book_controller.router)
