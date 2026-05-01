@@ -1,13 +1,21 @@
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 
 import pytest
 import app.services.loan_service as loan_service_module
+from app.models.loan import LoanStatus
 from app.services.user_service import create_user
 from app.services.author_service import create_author
 from app.services.book_service import create_book
-from app.services.loan_service import create_loan, return_loan, LoanAlreadyReturnedError
+from app.services.loan_service import (
+    create_loan,
+    list_active_loans,
+    list_loans,
+    list_overdue_loans,
+    return_loan,
+    LoanAlreadyReturnedError,
+)
 from app.schemas.user import UserCreate
 from app.schemas.author import AuthorCreate
 from app.schemas.book import BookCreate
@@ -122,3 +130,82 @@ def test_create_loan_logs_unexpected_error(db, monkeypatch, caplog):
     assert error_record.operation == "create_loan"
     assert error_record.user_id == user.id
     assert error_record.book_id == book.id
+
+
+def test_list_loans_filters_by_status_user_and_overdue(db):
+    user = create_user(db, UserCreate(name="Filter User", email="filter@example.com"))
+    second_user = create_user(db, UserCreate(name="Second User", email="second@example.com"))
+    author = create_author(db, AuthorCreate(name="Filter Author"))
+    active_book = create_book(
+        db,
+        BookCreate(
+            isbn="1234567890",
+            author_id=author.id,
+            title="Active Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+    overdue_book = create_book(
+        db,
+        BookCreate(
+            isbn="1234567891",
+            author_id=author.id,
+            title="Overdue Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+    returned_book = create_book(
+        db,
+        BookCreate(
+            isbn="1234567892",
+            author_id=author.id,
+            title="Returned Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+    second_user_book = create_book(
+        db,
+        BookCreate(
+            isbn="1234567893",
+            author_id=author.id,
+            title="Second User Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+
+    active_loan = create_loan(db, user.id, active_book.id)
+    overdue_loan = create_loan(db, user.id, overdue_book.id)
+    returned_loan = create_loan(db, user.id, returned_book.id)
+    create_loan(db, second_user.id, second_user_book.id)
+
+    overdue_loan.expected_return_date = datetime.now(timezone.utc) - timedelta(days=2)
+    db.commit()
+    return_loan(db, returned_loan.id)
+
+    all_loans, all_total = list_loans(db)
+    assert all_total == 4
+    assert len(all_loans) == 4
+
+    active_loans, active_total = list_loans(db, status=LoanStatus.ACTIVE)
+    assert active_total == 3
+    assert {loan.status for loan in active_loans} == {"active"}
+
+    returned_loans, returned_total = list_loans(db, status=LoanStatus.RETURNED)
+    assert returned_total == 1
+    assert returned_loans[0].id == returned_loan.id
+
+    user_loans, user_total = list_loans(db, user_id=user.id)
+    assert user_total == 3
+    assert {loan.user_id for loan in user_loans} == {user.id}
+
+    overdue_loans, overdue_total = list_loans(db, overdue=True)
+    assert overdue_total == 1
+    assert overdue_loans[0].id == overdue_loan.id
+
+    active_endpoint_loans, active_endpoint_total = list_active_loans(db)
+    assert active_endpoint_total == 3
+    assert active_loan.id in {loan.id for loan in active_endpoint_loans}
+
+    overdue_endpoint_loans, overdue_endpoint_total = list_overdue_loans(db)
+    assert overdue_endpoint_total == 1
+    assert overdue_endpoint_loans[0].id == overdue_loan.id
