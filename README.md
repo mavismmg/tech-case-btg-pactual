@@ -545,6 +545,12 @@ O endpoint de leitura é restrito a `admin` e `librarian`:
 GET /metrics/loans
 ```
 
+Os eventos brutos de `loan_operation_metrics` também podem ser exportados em CSV por `admin` ou `librarian`:
+
+```text
+GET /metrics/loans/export.csv
+```
+
 Exemplo de resposta:
 
 ```json
@@ -847,6 +853,7 @@ Filtros disponíveis em `GET /loans/`:
 | Método | Endpoint | Descrição |
 | --- | --- | --- |
 | `GET` | `/metrics/loans` | Retorna resumo operacional de empréstimos. Requer `admin` ou `librarian`. |
+| `GET` | `/metrics/loans/export.csv` | Exporta eventos operacionais de empréstimos em CSV. Requer `admin` ou `librarian`. |
 
 ## Exemplos de Uso
 
@@ -990,6 +997,14 @@ curl http://localhost:8000/health
 ```bash
 curl http://localhost:8000/metrics/loans \
   -H "Authorization: Bearer $TOKEN"
+```
+
+### 15. Exportar Métricas de Empréstimos em CSV
+
+```bash
+curl http://localhost:8000/metrics/loans/export.csv \
+  -H "Authorization: Bearer $TOKEN" \
+  -o loan_operation_metrics.csv
 ```
 
 ## Collection Postman
