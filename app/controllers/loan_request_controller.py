@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_account, get_db, require_roles
+from app.core.rate_limit import rate_limit
 from app.models.account import Account, AccountRole
 from app.models.loan_request import LoanRequestStatus, LoanRequestType
 from app.schemas.common import PaginatedResponse
@@ -58,6 +59,7 @@ def _raise_request_error(exc: Exception) -> NoReturn:
     "/loan-requests/",
     response_model=LoanRequestResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit(limit=10))],
 )
 def create_loan_request(
     request_data: LoanRequestCreate,
@@ -74,6 +76,7 @@ def create_loan_request(
     "/return-requests/",
     response_model=LoanRequestResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit(limit=10))],
 )
 def create_return_request(
     request_data: LoanActionRequestCreate,
@@ -95,6 +98,7 @@ def create_return_request(
     "/renewal-requests/",
     response_model=LoanRequestResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit(limit=10))],
 )
 def create_renewal_request(
     request_data: LoanActionRequestCreate,
@@ -134,7 +138,7 @@ def list_loan_requests(
     "/loan-requests/{request_id}/approve",
     response_model=LoanRequestResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[staff_only],
+    dependencies=[staff_only, Depends(rate_limit(limit=20))],
 )
 def approve_loan_request(
     request_id: int,
@@ -151,7 +155,7 @@ def approve_loan_request(
     "/loan-requests/{request_id}/reject",
     response_model=LoanRequestResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[staff_only],
+    dependencies=[staff_only, Depends(rate_limit(limit=20))],
 )
 def reject_loan_request(
     request_id: int,
