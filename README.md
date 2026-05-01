@@ -10,6 +10,7 @@ O projeto foi mantido simples de rodar localmente com Docker Compose, mas sem ab
 - [Funcionalidades Implementadas](#funcionalidades-implementadas)
 - [Tecnologias Utilizadas](#tecnologias-utilizadas)
 - [Arquitetura](#arquitetura)
+- [Aplicação de SOLID](#aplicação-de-solid)
 - [Modelo de Domínio](#modelo-de-domínio)
 - [Regras de Negócio Implementadas](#regras-de-negócio-implementadas)
 - [Fluxo de Empréstimo](#fluxo-de-empréstimo)
@@ -157,6 +158,20 @@ Dockerfile         # Imagem da API
 Makefile           # Comandos auxiliares
 requirements.txt   # Dependências Python
 ```
+
+## Aplicação de SOLID
+
+O projeto aplica SOLID de forma pragmática, principalmente pela separação em camadas. A proposta não foi criar uma arquitetura enterprise com interfaces para tudo, mas manter responsabilidades claras e facilitar evolução/testes.
+
+| Princípio | Como aparece no projeto |
+| --- | --- |
+| Single Responsibility | Controllers tratam HTTP, services concentram regras de negócio, repositories acessam o banco, schemas definem contratos e `core` concentra infraestrutura. |
+| Open/Closed | Parcialmente atendido. As regras estão centralizadas nos services, mas novos tipos de fluxo em `LoanRequest` ainda exigiriam alterar o service principal. |
+| Liskov Substitution | Pouco aplicável, pois o projeto não usa hierarquias de classes relevantes. Não há sinais de violação. |
+| Interface Segregation | Aplicado de forma simples pela separação dos módulos por domínio e camada, sem contratos artificiais. |
+| Dependency Inversion | Parcialmente atendido. Services usam repositories concretos; para o tamanho do case isso reduz complexidade, mas em produção poderia evoluir para injeção de dependências/ports. |
+
+O principal trade-off foi manter uma arquitetura compreensível e objetiva para o escopo do desafio, evitando abstrações prematuras.
 
 ## Modelo de Domínio
 
