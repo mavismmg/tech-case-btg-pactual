@@ -1,5 +1,8 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
+from app.schemas.notification import NotificationChannel
 from app.services.loan_service import (
     LoanAlreadyReturnedError,
     LoanBookIsNotAvailableError,
@@ -8,6 +11,7 @@ from app.services.loan_service import (
     create_loan,
     return_loan,
 )
+from app.services.notification_service import send_due_loan_notifications
 from app.services.user_service import UserAlreadyExistsError, delete_user
 
 
@@ -102,3 +106,27 @@ def test_book_availability_endpoints_continue_grouping_exemplars_by_isbn(client,
         first_response.json()["id"],
         second_response.json()["id"],
     }
+
+
+def test_due_loan_notifications_are_not_duplicated_for_same_day(db, loan_factory):
+    now = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    loan_factory(expected_return_date=now + timedelta(hours=3))
+
+    first_response = send_due_loan_notifications(db, days_ahead=1, channel=NotificationChannel.EMAIL, now=now)
+    second_response = send_due_loan_notifications(db, days_ahead=1, channel=NotificationChannel.EMAIL, now=now)
+
+    assert first_response.sent_email_count == 1
+    assert second_response.sent_email_count == 0
+    assert second_response.skipped_count == 1
+
+
+def test_due_loan_email_delivery_survives_webhook_failure(db, loan_factory, monkeypatch):
+    now = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    loan_factory(expected_return_date=now + timedelta(hours=3))
+    monkeypatch.delenv("DUE_LOAN_WEBHOOK_URL", raising=False)
+
+    response = send_due_loan_notifications(db, days_ahead=1, channel=NotificationChannel.ALL, now=now)
+
+    assert response.sent_email_count == 1
+    assert response.sent_webhook_count == 0
+    assert response.failed_count == 1
