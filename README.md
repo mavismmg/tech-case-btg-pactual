@@ -4,6 +4,31 @@ API REST para gerenciamento de uma biblioteca digital. A aplicação cobre o cad
 
 O projeto foi mantido simples de rodar localmente com Docker Compose, mas sem abrir mão de alguns cuidados esperados em uma API backend: autenticação JWT, autorização por perfis, cache com Redis, rate limiting, validações com Pydantic, separação em camadas e testes automatizados.
 
+## Índice
+
+- [Contexto do Desafio](#contexto-do-desafio)
+- [Funcionalidades Implementadas](#funcionalidades-implementadas)
+- [Tecnologias Utilizadas](#tecnologias-utilizadas)
+- [Arquitetura](#arquitetura)
+- [Modelo de Domínio](#modelo-de-domínio)
+- [Regras de Negócio Implementadas](#regras-de-negócio-implementadas)
+- [Fluxo de Empréstimo](#fluxo-de-empréstimo)
+- [Atomicidade no Fluxo de Empréstimos](#atomicidade-no-fluxo-de-empréstimos)
+- [Autenticação e Autorização](#autenticação-e-autorização)
+- [Cache com Redis](#cache-com-redis)
+- [Rate Limiting](#rate-limiting)
+- [Tratamento de Erros](#tratamento-de-erros)
+- [Logging](#logging)
+- [Health Check](#health-check)
+- [Banco de Dados e Inicialização](#banco-de-dados-e-inicialização)
+- [Como Rodar Localmente](#como-rodar-localmente)
+- [Como Rodar os Testes](#como-rodar-os-testes)
+- [Endpoints Principais](#endpoints-principais)
+- [Exemplos de Uso](#exemplos-de-uso)
+- [Collection Postman](#collection-postman)
+- [Decisões Arquiteturais e Trade-offs](#decisões-arquiteturais-e-trade-offs)
+- [Melhorias Futuras](#melhorias-futuras)
+
 ## Contexto do Desafio
 
 Este projeto foi desenvolvido para o tech case de uma API REST de biblioteca digital. O desafio avalia arquitetura em camadas, boas práticas em Python, validações, tratamento de erros, organização de código, testes e iniciativa técnica.
@@ -79,6 +104,40 @@ Responsabilidades principais:
 | `schemas` | Contratos Pydantic de entrada e saída. |
 | `core` | Infraestrutura: banco, segurança, cache, rate limit e logging. |
 
+### Visão da API
+
+```mermaid
+flowchart TD
+    Client[Cliente / Postman / Swagger] --> API[FastAPI App]
+
+    API --> Auth[Autenticação JWT]
+    API --> RateLimit[Rate limiting]
+    RateLimit --> Redis[(Redis)]
+
+    API --> Controllers[Controllers / Routers]
+    Controllers --> Schemas[Schemas Pydantic]
+    Controllers --> Services[Services]
+
+    Services --> Repositories[Repositories]
+    Services --> Cache[Cache e locks]
+    Cache --> Redis
+
+    Repositories --> DB[(PostgreSQL)]
+    Services --> Logs[Logs estruturados JSON]
+```
+
+### Fluxo em Camadas
+
+```mermaid
+flowchart LR
+    Request[HTTP Request] --> Controller[Controller]
+    Controller --> Service[Service]
+    Service --> Repository[Repository]
+    Repository --> Database[(PostgreSQL)]
+    Service --> Redis[(Redis)]
+    Controller --> Response[HTTP Response]
+```
+
 ### Estrutura de Pastas
 
 ```text
@@ -99,6 +158,90 @@ requirements.txt   # Dependências Python
 ```
 
 ## Modelo de Domínio
+
+```mermaid
+erDiagram
+    USERS ||--o{ LOANS : has
+    AUTHORS ||--o{ BOOKS : writes
+    BOOKS ||--o{ LOANS : borrowed_in
+
+    USERS ||--o| ACCOUNTS : linked_to
+
+    ACCOUNTS ||--o{ LOAN_REQUESTS : requester
+    ACCOUNTS ||--o{ LOAN_REQUESTS : reviewer
+    USERS ||--o{ LOAN_REQUESTS : requests
+    BOOKS ||--o{ LOAN_REQUESTS : requested_book
+    LOANS ||--o{ LOAN_REQUESTS : requested_action
+
+    USERS {
+        int id PK
+        string name
+        string email
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        datetime deleted_at
+    }
+
+    ACCOUNTS {
+        int id PK
+        string name
+        string email
+        string password_hash
+        string role
+        int user_id FK
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        datetime deleted_at
+    }
+
+    AUTHORS {
+        int id PK
+        string name
+        datetime created_at
+        datetime updated_at
+        datetime deleted_at
+    }
+
+    BOOKS {
+        int id PK
+        string isbn
+        int author_id FK
+        string title
+        date published_date
+        boolean is_available
+        datetime created_at
+        datetime updated_at
+        datetime deleted_at
+    }
+
+    LOANS {
+        int id PK
+        int user_id FK
+        int book_id FK
+        datetime loan_date
+        datetime expected_return_date
+        datetime actual_return_date
+        float fine_value
+        string status
+        int renewal_count
+    }
+
+    LOAN_REQUESTS {
+        int id PK
+        string request_type
+        string status
+        int requester_account_id FK
+        int reviewer_account_id FK
+        int user_id FK
+        int book_id FK
+        int loan_id FK
+        string rejection_reason
+        datetime created_at
+        datetime reviewed_at
+    }
+```
 
 | Entidade | Descrição |
 | --- | --- |
@@ -177,6 +320,42 @@ reader/user -> POST /renewal-requests/ -> staff approve -> due date + 14 days
 ```
 
 A renovação também passa por solicitação e aprovação. Quando aprovada, estende o prazo por mais 14 dias e incrementa `renewal_count`.
+
+### Sequência Principal
+
+```mermaid
+sequenceDiagram
+    actor Reader as reader/user
+    participant API as FastAPI
+    participant RequestService as LoanRequestService
+    participant LoanService as LoanService
+    participant DB as PostgreSQL
+    actor Staff as admin/librarian
+
+    Reader->>API: POST /loan-requests/
+    API->>RequestService: create_loan_request(book_id)
+    RequestService->>DB: cria LoanRequest pending
+
+    Staff->>API: POST /loan-requests/{id}/approve
+    API->>RequestService: approve_loan_request(id)
+    RequestService->>LoanService: create_loan(user_id, book_id)
+    LoanService->>DB: valida usuário, livro, limite e disponibilidade
+    LoanService->>DB: cria Loan active
+    LoanService->>DB: marca Book indisponível
+    RequestService->>DB: marca LoanRequest approved
+```
+
+## Atomicidade no Fluxo de Empréstimos
+
+As operações mais sensíveis do projeto estão no fluxo de empréstimos. Por isso, `loan_service` e `loan_request_service` concentram as regras que precisam acontecer de forma consistente.
+
+No `loan_service`, a criação de um empréstimo e a devolução são tratadas como operações transacionais. A criação valida o usuário, confere o limite de 3 empréstimos ativos, valida se o livro existe, verifica a disponibilidade e só então cria o `Loan` e marca o `Book` como indisponível. Se qualquer etapa falhar, a transação é revertida e o estado do livro/empréstimo não fica parcialmente atualizado.
+
+Na devolução, a mesma ideia é aplicada: o serviço busca o empréstimo, valida se ele ainda está ativo, calcula a multa, preenche a data real de devolução, altera o status para `returned` e libera o livro. Essas mudanças são confirmadas juntas; em caso de erro, o rollback evita inconsistência entre `Loan` e `Book`.
+
+Também há uma preocupação com concorrência no momento de criar empréstimos. O serviço usa locks no Redis por usuário e por livro para reduzir o risco de duas requisições simultâneas emprestarem o mesmo exemplar ou ultrapassarem o limite de empréstimos ativos do usuário. Além disso, o repositório utiliza bloqueio pessimista com `with_for_update` ao buscar registros críticos.
+
+O `loan_request_service` orquestra o fluxo de aprovação. Quando um `admin` ou `librarian` aprova uma solicitação, ele delega a criação/devolução/renovação para `loan_service`. Assim, a solicitação só é marcada como `approved` depois que a operação de domínio foi concluída com sucesso. Se a regra de negócio falhar, a solicitação não avança indevidamente e o erro é retornado para o controller.
 
 ## Autenticação e Autorização
 
