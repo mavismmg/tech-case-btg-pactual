@@ -27,7 +27,7 @@ class LoanBookIsNotAvailableError(Exception):
 
 class LoanLimitExceededError(Exception):
     def __init__(self, user_id: int) -> None:
-        self.message = f"Cannot create loan for user with ID {user_id}. User has more than 3 active loans."
+        self.message = f"Cannot create loan for user with ID {user_id}. User already has 3 active loans."
         super().__init__(self.message)
 
 class LoanUserNotFoundError(Exception):
@@ -358,10 +358,33 @@ def get_loans_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100
     loans, total = loan_repository.get_loans_by_user_id(db, user_id, skip, limit)
     return loans, total
     
-def list_loans(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
-    logger.debug("Listing loans", extra={"operation": "list_loans", "skip": skip, "limit": limit})
+def list_loans(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+    status: LoanStatus | None = None,
+    user_id: int | None = None,
+    overdue: bool | None = None,
+) -> tuple[list[Loan], int]:
+    logger.debug(
+        "Listing loans",
+        extra={
+            "operation": "list_loans",
+            "skip": skip,
+            "limit": limit,
+            "status": status.value if status else None,
+            "user_id": user_id,
+            "overdue": overdue,
+        },
+    )
 
-    return loan_repository.get_loans(db, skip, limit)
+    return loan_repository.get_loans(db, skip, limit, status, user_id, overdue)
+
+def list_active_loans(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
+    return list_loans(db, skip=skip, limit=limit, status=LoanStatus.ACTIVE)
+
+def list_overdue_loans(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
+    return list_loans(db, skip=skip, limit=limit, overdue=True)
 
 def get_loan_by_id(db: Session, loan_id: int) -> Loan | None:
     logger.debug("Fetching loan by ID", extra={"operation": "get_loan_by_id", "loan_id": loan_id})
