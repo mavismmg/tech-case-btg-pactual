@@ -14,6 +14,7 @@ from app.controllers import loan_controller
 from app.controllers import author_controller
 from app.controllers import auth_controller
 from app.controllers import account_controller
+from app.controllers import loan_request_controller
 
 app = FastAPI(title="Library API")
 
@@ -35,10 +36,46 @@ if engine.dialect.name == "postgresql":
                 "ON users (email) WHERE deleted_at IS NULL"
             )
         )
+        connection.execute(text("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS user_id INTEGER"))
+        connection.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'fk_accounts_user_id'
+                    ) THEN
+                        ALTER TABLE accounts
+                        ADD CONSTRAINT fk_accounts_user_id
+                        FOREIGN KEY (user_id) REFERENCES users(id);
+                    END IF;
+                END
+                $$;
+                """
+            )
+        )
+        connection.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS renewal_count INTEGER NOT NULL DEFAULT 0"))
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_loan_requests_pending_loan "
+                "ON loan_requests (user_id, book_id) "
+                "WHERE request_type = 'loan' AND status = 'pending'"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_loan_requests_pending_action "
+                "ON loan_requests (request_type, loan_id) "
+                "WHERE status = 'pending' AND loan_id IS NOT NULL"
+            )
+        )
 
 app.include_router(auth_controller.router)
 app.include_router(account_controller.router)
 app.include_router(user_controller.router)
 app.include_router(book_controller.router)
 app.include_router(loan_controller.router)
+app.include_router(loan_request_controller.router)
 app.include_router(author_controller.router)

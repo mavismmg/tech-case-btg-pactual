@@ -46,6 +46,12 @@ class LoanReturnBookNotFoundError(Exception):
         super().__init__(self.message)
 
 
+class LoanRenewalNotAllowedError(Exception):
+    def __init__(self, loan_id: int, reason: str) -> None:
+        self.message = f"Cannot renew loan with ID {loan_id}. {reason}"
+        super().__init__(self.message)
+
+
 BUSINESS_RULE_EXCEPTIONS = (
     LoanNotFoundError,
     LoanBookNotFoundError,
@@ -54,6 +60,7 @@ BUSINESS_RULE_EXCEPTIONS = (
     LoanUserNotFoundError,
     LoanAlreadyReturnedError,
     LoanReturnBookNotFoundError,
+    LoanRenewalNotAllowedError,
 )
 
 
@@ -270,6 +277,77 @@ def return_loan(db: Session, loan_id: int) -> Loan:
             "user_id": loan.user_id,
             "book_id": loan.book_id,
             "fine_value": loan.fine_value,
+        },
+    )
+
+    return loan
+
+
+def renew_loan(db: Session, loan_id: int) -> Loan:
+    operation = "renew_loan"
+    logger.debug("Starting loan renewal flow", extra={"operation": operation, "loan_id": loan_id})
+
+    try:
+        with _transaction(db):
+            loan = loan_repository.get_loan_by_id(db, loan_id)
+            if loan is None:
+                logger.warning(
+                    "Loan renewal blocked because loan was not found",
+                    extra={"operation": operation, "loan_id": loan_id, "reason": "loan_not_found"},
+                )
+                raise LoanNotFoundError(loan_id)
+
+            if loan.status != LoanStatus.ACTIVE:
+                logger.warning(
+                    "Loan renewal blocked because loan is not active",
+                    extra={"operation": operation, "loan_id": loan_id, "reason": "loan_not_active"},
+                )
+                raise LoanRenewalNotAllowedError(loan_id, "Loan is not active.")
+
+            now = datetime.now(timezone.utc)
+            expected_return_date = loan.expected_return_date
+            if expected_return_date.tzinfo is None:
+                expected_return_date = expected_return_date.replace(tzinfo=timezone.utc)
+
+            if expected_return_date < now:
+                logger.warning(
+                    "Loan renewal blocked because loan is overdue",
+                    extra={"operation": operation, "loan_id": loan_id, "reason": "loan_overdue"},
+                )
+                raise LoanRenewalNotAllowedError(loan_id, "Loan is overdue.")
+
+            if loan.renewal_count >= 1:
+                logger.warning(
+                    "Loan renewal blocked because renewal limit was reached",
+                    extra={
+                        "operation": operation,
+                        "loan_id": loan_id,
+                        "renewal_count": loan.renewal_count,
+                        "reason": "renewal_limit_reached",
+                    },
+                )
+                raise LoanRenewalNotAllowedError(loan_id, "Renewal limit reached.")
+
+            loan.expected_return_date = loan.expected_return_date + timedelta(days=14)
+            loan.renewal_count += 1
+
+        db.refresh(loan)
+    except BUSINESS_RULE_EXCEPTIONS:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Unexpected error while renewing loan", extra={"operation": operation, "loan_id": loan_id})
+        raise
+
+    logger.info(
+        "Loan renewed successfully",
+        extra={
+            "operation": operation,
+            "loan_id": loan.id,
+            "user_id": loan.user_id,
+            "book_id": loan.book_id,
+            "renewal_count": loan.renewal_count,
         },
     )
 

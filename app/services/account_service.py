@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.account import Account, AccountRole
-from app.repositories import account_repository
+from app.repositories import account_repository, user_repository
 from app.schemas.account import AccountBootstrap, AccountCreate, AccountLogin
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,24 @@ class InactiveAccountError(Exception):
         super().__init__(self.message)
 
 
+class ReaderAccountRequiresUserError(Exception):
+    def __init__(self):
+        self.message = "Reader accounts must be linked to a user."
+        super().__init__(self.message)
+
+
+class StaffAccountCannotHaveUserError(Exception):
+    def __init__(self):
+        self.message = "Admin and librarian accounts cannot be linked to a user."
+        super().__init__(self.message)
+
+
+class AccountUserNotFoundError(Exception):
+    def __init__(self, user_id: int):
+        self.message = f"User with ID {user_id} not found for reader account."
+        super().__init__(self.message)
+
+
 def create_account(db: Session, account_data: AccountCreate) -> Account:
     operation = "create_account"
     existing_account = account_repository.get_account_by_email(db, account_data.email)
@@ -50,11 +68,38 @@ def create_account(db: Session, account_data: AccountCreate) -> Account:
         )
         raise AccountAlreadyExistsError(account_data.email)
 
+    if account_data.role == AccountRole.READER:
+        if account_data.user_id is None:
+            logger.warning(
+                "Reader account creation blocked because user_id was not provided",
+                extra={"operation": operation, "reason": "reader_user_id_required"},
+            )
+            raise ReaderAccountRequiresUserError()
+
+        user = user_repository.get_user_by_id(db, account_data.user_id)
+        if user is None:
+            logger.warning(
+                "Reader account creation blocked because linked user was not found",
+                extra={
+                    "operation": operation,
+                    "user_id": account_data.user_id,
+                    "reason": "user_not_found",
+                },
+            )
+            raise AccountUserNotFoundError(account_data.user_id)
+    elif account_data.user_id is not None:
+        logger.warning(
+            "Staff account creation blocked because user_id was provided",
+            extra={"operation": operation, "user_id": account_data.user_id, "reason": "staff_user_id_not_allowed"},
+        )
+        raise StaffAccountCannotHaveUserError()
+
     account = Account(
         name=account_data.name,
         email=account_data.email,
         password_hash=hash_password(account_data.password),
         role=account_data.role.value,
+        user_id=account_data.user_id,
         is_active=True,
     )
 

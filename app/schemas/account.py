@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer
 
@@ -10,6 +11,7 @@ class AccountCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     role: AccountRole = AccountRole.LIBRARIAN
+    user_id: Annotated[int, Field(gt=0)] | None = None
 
 
 class AccountBootstrap(BaseModel):
@@ -28,6 +30,7 @@ class AccountResponse(BaseModel):
     name: str
     email: EmailStr
     role: AccountRole
+    user_id: int | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime | None = None

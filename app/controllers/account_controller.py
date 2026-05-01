@@ -6,7 +6,13 @@ from app.models.account import AccountRole
 from app.schemas.account import AccountCreate, AccountResponse
 from app.schemas.common import PaginatedResponse
 from app.services import account_service
-from app.services.account_service import AccountAlreadyExistsError, AccountNotFoundError
+from app.services.account_service import (
+    AccountAlreadyExistsError,
+    AccountNotFoundError,
+    AccountUserNotFoundError,
+    ReaderAccountRequiresUserError,
+    StaffAccountCannotHaveUserError,
+)
 
 router = APIRouter(prefix="/accounts", tags=["Accounts"])
 
@@ -25,6 +31,16 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)) -> Acc
     except AccountAlreadyExistsError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=e.message,
+        )
+    except AccountUserNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message,
+        )
+    except (ReaderAccountRequiresUserError, StaffAccountCannotHaveUserError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=e.message,
         )
 

@@ -147,6 +147,91 @@ def test_auth_flow_create_and_return_loan(client):
     assert return_response.json()["status"] == "returned"
 
 
+def test_reader_can_request_loan_but_staff_must_approve(client):
+    _bootstrap_admin(client)
+    admin_token = _login(client)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    user_response = client.post(
+        "/users/",
+        json={"name": "Reader", "email": "reader@example.com"},
+        headers=admin_headers,
+    )
+    assert user_response.status_code == 201
+
+    reader_account_response = client.post(
+        "/accounts/",
+        json={
+            "name": "Reader Account",
+            "email": "reader-account@example.com",
+            "password": "strong-password",
+            "role": "reader",
+            "user_id": user_response.json()["id"],
+        },
+        headers=admin_headers,
+    )
+    assert reader_account_response.status_code == 201
+    assert reader_account_response.json()["user_id"] == user_response.json()["id"]
+
+    reader_token = _login(client, "reader-account@example.com")
+    reader_headers = {"Authorization": f"Bearer {reader_token}"}
+
+    author_response = client.post(
+        "/authors/",
+        json={"name": "Request Author"},
+        headers=admin_headers,
+    )
+    assert author_response.status_code == 201
+
+    book_response = client.post(
+        "/books/",
+        json={
+            "isbn": "1234567890",
+            "author_id": author_response.json()["id"],
+            "title": "Request Book",
+            "published_date": "2023-01-01",
+        },
+        headers=admin_headers,
+    )
+    assert book_response.status_code == 201
+
+    direct_loan_response = client.post(
+        "/loans/",
+        params={
+            "user_id": user_response.json()["id"],
+            "book_id": book_response.json()["id"],
+        },
+        headers=reader_headers,
+    )
+    assert direct_loan_response.status_code == 403
+
+    request_response = client.post(
+        "/loan-requests/",
+        json={"book_id": book_response.json()["id"]},
+        headers=reader_headers,
+    )
+    assert request_response.status_code == 201
+    assert request_response.json()["status"] == "pending"
+
+    reader_approve_response = client.post(
+        f"/loan-requests/{request_response.json()['id']}/approve",
+        headers=reader_headers,
+    )
+    assert reader_approve_response.status_code == 403
+
+    approve_response = client.post(
+        f"/loan-requests/{request_response.json()['id']}/approve",
+        headers=admin_headers,
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["status"] == "approved"
+
+    loans_response = client.get(f"/users/{user_response.json()['id']}/loans", headers=admin_headers)
+    assert loans_response.status_code == 200
+    assert loans_response.json()["total"] == 1
+    assert loans_response.json()["items"][0]["status"] == "active"
+
+
 def test_login_invalid_credentials_returns_401(client):
     _bootstrap_admin(client)
 

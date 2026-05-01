@@ -30,6 +30,7 @@ class Loan(Base):
 
     fine_value: Mapped[float] = mapped_column(default=0.0, nullable=False)
     status: Mapped[str] = mapped_column(String, default="active", nullable=False)
+    renewal_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (
         Index(

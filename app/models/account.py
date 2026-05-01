@@ -1,8 +1,8 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -11,6 +11,7 @@ from app.core.database import Base
 class AccountRole(str, Enum):
     ADMIN = "admin"
     LIBRARIAN = "librarian"
+    READER = "reader"
 
 
 class Account(Base):
@@ -25,6 +26,7 @@ class Account(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False, default=AccountRole.LIBRARIAN.value)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, default=None)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -41,3 +43,5 @@ class Account(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+    user = relationship("User")

@@ -19,6 +19,7 @@ class LoanResponse(BaseModel):
     actual_return_date: datetime | None
     fine_value: float
     status: str
+    renewal_count: int
 
     model_config = ConfigDict(from_attributes=True)
 
