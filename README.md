@@ -408,6 +408,10 @@ A chave considera:
 
 Quando o limite é excedido, a API retorna `429 Too Many Requests` com header `Retry-After`.
 
+A implementação usa uma janela fixa por chave Redis, iniciada no primeiro request daquela chave. Isso significa que, quando a janela está perto de expirar, o cliente pode receber `429` com um `Retry-After` baixo e voltar a consumir o limite após a expiração.
+
+Esse modelo é simples e suficiente para o escopo do case, mas tem o trade-off comum de fixed window: pode permitir bursts em bordas de janela. Em produção, uma evolução natural seria usar sliding window, token bucket ou um script Lua no Redis para combinar incremento e expiração de forma totalmente atômica.
+
 Se o Redis estiver indisponível, a aplicação registra o problema e permite a requisição. É um trade-off consciente: em um case local, preferi manter a API disponível em vez de bloquear a operação por indisponibilidade do Redis.
 
 ## Tratamento de Erros
