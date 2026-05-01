@@ -91,11 +91,14 @@ def get_user_loans(
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[LoanResponse]:
     try:
+        user_service.get_user_by_id(db, user_id)
         loans, total = loan_service.get_loans_by_user(db, user_id, skip, limit)
         loan_responses = [LoanResponse.model_validate(loan) for loan in loans]
+
         return PaginatedResponse(items=loan_responses, total=total, skip=skip, limit=limit)
-    except Exception:
+    
+    except UserNotFoundError as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while fetching user loans."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
         )
