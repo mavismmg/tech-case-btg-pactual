@@ -14,6 +14,7 @@ from app.services.book_service import (
     BookAuthorNotFoundError,
     BookCreationError,
     BookHasActiveLoansError,
+    BookIsbnConflictError,
     BookNotFoundError,
     BookTitleIsbnConflictError,
 )
@@ -40,7 +41,7 @@ def create_book(book: BookCreate, db: Session = Depends(get_db)) -> BookResponse
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except BookTitleIsbnConflictError as e:
+    except (BookTitleIsbnConflictError, BookIsbnConflictError) as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=e.message,

@@ -39,6 +39,12 @@ class BookTitleIsbnConflictError(Exception):
         super().__init__(self.message)
 
 
+class BookIsbnConflictError(Exception):
+    def __init__(self) -> None:
+        self.message = "ISBN already exists for a different book metadata."
+        super().__init__(self.message)
+
+
 class BookHasActiveLoansError(Exception):
     def __init__(self, book_id: int):
         self.message = f"Cannot delete book with ID {book_id}. Book has active loans."
@@ -193,6 +199,32 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
         )
         raise BookTitleIsbnConflictError()
 
+    existing_book_with_isbn = book_repository.get_active_book_by_isbn(db, book_data.isbn)
+    if (
+        existing_book_with_isbn is not None
+        and (
+            existing_book_with_isbn.author_id != book_data.author_id
+            or existing_book_with_isbn.title != book_data.title
+            or existing_book_with_isbn.published_date != book_data.published_date
+        )
+    ):
+        logger.warning(
+            "Book creation blocked because ISBN already exists with different metadata",
+            extra={
+                "operation": operation,
+                "isbn": book_data.isbn,
+                "existing_book_id": existing_book_with_isbn.id,
+                "existing_author_id": existing_book_with_isbn.author_id,
+                "requested_author_id": book_data.author_id,
+                "existing_title": existing_book_with_isbn.title,
+                "requested_title": book_data.title,
+                "existing_published_date": existing_book_with_isbn.published_date.isoformat(),
+                "requested_published_date": book_data.published_date.isoformat(),
+                "reason": "isbn_metadata_conflict",
+            },
+        )
+        raise BookIsbnConflictError()
+
     try:
         new_book = book_repository.create_book(db, book_data)
         invalidate_available_exemplars_cache(new_book.isbn)
@@ -209,7 +241,7 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 
         return new_book
 
-    except (BookAuthorNotFoundError, BookTitleIsbnConflictError):
+    except (BookAuthorNotFoundError, BookTitleIsbnConflictError, BookIsbnConflictError):
         raise
     except Exception as e:
         logger.exception(

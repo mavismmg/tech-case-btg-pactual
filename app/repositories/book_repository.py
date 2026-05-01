@@ -68,6 +68,12 @@ def get_active_book_by_author_and_title(db: Session, author_id: int, title: str)
     )
 
 
+def get_active_book_by_isbn(db: Session, isbn: str) -> Book | None:
+    logger.info(f"Fetching active book with ISBN: {isbn}")
+
+    return db.query(Book).filter(Book.isbn == isbn, Book.deleted_at.is_(None)).first()
+
+
 def soft_delete_book(db: Session, db_book: Book) -> Book:
     try:
         db_book.deleted_at = datetime.now(timezone.utc)
