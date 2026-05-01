@@ -13,6 +13,7 @@ O projeto foi mantido simples de rodar localmente com Docker Compose, mas sem ab
 - [Aplicação de SOLID](#aplicação-de-solid)
 - [Modelo de Domínio](#modelo-de-domínio)
 - [Regras de Negócio Implementadas](#regras-de-negócio-implementadas)
+- [Estados do Fluxo de Empréstimo](#estados-do-fluxo-de-empréstimo)
 - [Fluxo de Empréstimo](#fluxo-de-empréstimo)
 - [Atomicidade no Fluxo de Empréstimos](#atomicidade-no-fluxo-de-empréstimos)
 - [Autenticação e Autorização](#autenticação-e-autorização)
@@ -21,6 +22,7 @@ O projeto foi mantido simples de rodar localmente com Docker Compose, mas sem ab
 - [Tratamento de Erros](#tratamento-de-erros)
 - [Logging](#logging)
 - [Health Check](#health-check)
+- [Métricas Operacionais](#métricas-operacionais)
 - [Banco de Dados e Inicialização](#banco-de-dados-e-inicialização)
 - [Como Rodar Localmente](#como-rodar-localmente)
 - [Como Rodar os Testes](#como-rodar-os-testes)
@@ -67,6 +69,7 @@ No desenho atual, o domínio foi dividido em:
 - Rate limiting por rota e identidade do cliente.
 - Logging estruturado em JSON.
 - Health check com verificação básica de banco e Redis.
+- Métricas operacionais de empréstimos registradas no PostgreSQL.
 - Testes unitários e funcionais com Pytest.
 - Collection Postman para avaliação manual da API.
 - Documentação automática via Swagger/OpenAPI do FastAPI.
@@ -188,6 +191,8 @@ erDiagram
     USERS ||--o{ LOAN_REQUESTS : requests
     BOOKS ||--o{ LOAN_REQUESTS : requested_book
     LOANS ||--o{ LOAN_REQUESTS : requested_action
+    LOANS ||--o{ LOAN_OPERATION_METRICS : observed_in
+    LOAN_REQUESTS ||--o{ LOAN_OPERATION_METRICS : observed_in
 
     USERS {
         int id PK
@@ -257,6 +262,19 @@ erDiagram
         datetime created_at
         datetime reviewed_at
     }
+
+    LOAN_OPERATION_METRICS {
+        int id PK
+        string operation
+        int loan_id FK
+        int loan_request_id FK
+        int user_id FK
+        int book_id FK
+        int account_id FK
+        int reviewer_account_id FK
+        float fine_value
+        datetime created_at
+    }
 ```
 
 | Entidade | Descrição |
@@ -267,6 +285,7 @@ erDiagram
 | `Book` | Exemplar de livro, vinculado a um autor e identificado por ISBN. |
 | `Loan` | Empréstimo ativo ou devolvido, com prazo, data de devolução, multa e contador de renovação. |
 | `LoanRequest` | Solicitação de empréstimo, devolução ou renovação, revisada por staff. |
+| `LoanOperationMetric` | Registro operacional de eventos relevantes do ciclo de empréstimos. |
 
 ### Nota sobre `User`, `Account` e `reader`
 
@@ -294,6 +313,20 @@ Por isso, quando a documentação menciona `reader/user`, está se referindo ao 
 - Apenas `admin` ou `librarian` pode aprovar/rejeitar solicitações e processar devoluções diretamente.
 - A renovação só é permitida para empréstimos ativos, não atrasados e com limite de uma renovação.
 - Solicitações pendentes duplicadas para a mesma operação são bloqueadas.
+
+## Estados do Fluxo de Empréstimo
+
+O fluxo separa a solicitação do empréstimo efetivo. Por isso, existem dois conjuntos de estados:
+
+| Entidade | Status | Significado |
+| --- | --- | --- |
+| `LoanRequest` | `pending` | Solicitação criada pelo `reader/user`, aguardando análise do staff. |
+| `LoanRequest` | `approved` | Solicitação aprovada por `admin` ou `librarian`. Quando a solicitação é de empréstimo, um `Loan` ativo é criado. |
+| `LoanRequest` | `rejected` | Solicitação rejeitada por `admin` ou `librarian`, sem alterar o estado do livro/empréstimo. |
+| `Loan` | `active` | Empréstimo efetivamente criado e ainda não devolvido. O livro permanece indisponível. |
+| `Loan` | `returned` | Empréstimo devolvido. A data real de devolução e a multa, quando houver, ficam registradas. |
+
+Na prática, `pending`, `approved` e `rejected` pertencem ao fluxo de aprovação (`LoanRequest`). O empréstimo em si (`Loan`) só nasce após aprovação ou criação direta por staff, e seus estados atuais são `active` e `returned`.
 
 ## Fluxo de Empréstimo
 
@@ -479,6 +512,44 @@ Resposta esperada:
 ```
 
 Quando o banco não responde, `status` passa para `degraded`. Para Redis, o retorno pode ser `ok`, `unavailable` ou `disabled`, já que a aplicação continua funcionando sem cache/rate limit em modo degradado.
+
+## Métricas Operacionais
+
+Além do health check, a aplicação registra métricas simples de domínio no PostgreSQL para acompanhar ações importantes do fluxo de empréstimos. A ideia é dar visibilidade operacional sem adicionar infraestrutura extra ao case.
+
+Eventos registrados:
+
+- solicitação de empréstimo/devolução/renovação criada;
+- solicitação aprovada;
+- solicitação rejeitada;
+- empréstimo criado;
+- empréstimo devolvido;
+- empréstimo renovado.
+
+O endpoint de leitura é restrito a `admin` e `librarian`:
+
+```text
+GET /metrics/loans
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "total_loans": 10,
+  "active_loans": 3,
+  "overdue_loans": 1,
+  "returned_loans": 7,
+  "total_fine_value": 12.0,
+  "events_by_operation": {
+    "loan_created": 10,
+    "loan_returned": 7,
+    "loan_renewed": 2
+  }
+}
+```
+
+O registro dessas métricas é best effort: se a gravação da métrica falhar, a aplicação registra um warning, mas não desfaz uma operação de empréstimo já concluída. Em produção, uma evolução natural seria exportar esses sinais para Prometheus/Grafana ou outra solução de observabilidade.
 
 ## Banco de Dados e Inicialização
 
@@ -681,6 +752,12 @@ Filtros disponíveis em `GET /loans/`:
 | `POST` | `/return-requests/` | Solicita devolução. Requer conta `reader/user`. |
 | `POST` | `/renewal-requests/` | Solicita renovação. Requer conta `reader/user`. |
 
+### Métricas
+
+| Método | Endpoint | Descrição |
+| --- | --- | --- |
+| `GET` | `/metrics/loans` | Retorna resumo operacional de empréstimos. Requer `admin` ou `librarian`. |
+
 ## Exemplos de Uso
 
 ### 1. Bootstrap do Administrador
@@ -818,6 +895,13 @@ curl http://localhost:8000/loans/overdue?skip=0\&limit=100 \
 curl http://localhost:8000/health
 ```
 
+### 14. Consultar Métricas de Empréstimos
+
+```bash
+curl http://localhost:8000/metrics/loans \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ## Collection Postman
 
 A collection Postman está disponível em:
@@ -836,13 +920,14 @@ Ela cobre o fluxo que eu usaria para avaliar rapidamente a API: bootstrap, login
 - **`create_all` em vez de Alembic**: simplifica o setup local do case. Para produção, eu migraria para Alembic.
 - **Cache com TTL curto**: melhora leituras frequentes sem exigir uma política pesada de invalidação.
 - **Locks Redis no empréstimo**: reduzem o risco de concorrência ao tentar emprestar o mesmo livro ou atingir o limite de um usuário.
+- **Métricas no banco**: deixam a avaliação local simples e dão visibilidade ao fluxo de empréstimos sem exigir Prometheus/Grafana no setup.
 - **Rate limiting fail-open**: uma falha no Redis não derruba a API, mas reduz temporariamente a proteção contra abuso.
 - **Exceções de domínio**: deixam as regras de negócio nos services e a tradução HTTP nos controllers.
 
 ## Melhorias Futuras
 
 - Adicionar Alembic para versionamento formal do schema.
-- Adicionar métricas de observabilidade.
+- Evoluir métricas para Prometheus/Grafana, com dashboards e alertas.
 - Implementar notificações de vencimento por email ou webhook.
 - Padronizar completamente a nomenclatura pública entre `reader` e `user`, se desejado.
 - Expandir testes de integração para mais cenários de autorização e concorrência.
