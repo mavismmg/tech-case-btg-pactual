@@ -6,6 +6,7 @@ from app.core.rate_limit import rate_limit
 from app.models.account import AccountRole
 from app.schemas.author import AuthorCreate, AuthorResponse
 from app.schemas.common import PaginatedResponse
+from app.schemas.params import PaginationLimit, PaginationSkip, PositivePathId
 from app.services import author_service
 from app.services.author_service import AuthorNotFoundError, AuthorCreationError, AuthorAlreadyExistsError
 
@@ -38,7 +39,11 @@ def create_author(author: AuthorCreate, db: Session = Depends(get_db)) -> Author
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(rate_limit(limit=60))],
 )
-def get_authors(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[AuthorResponse]:
+def get_authors(
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[AuthorResponse]:
     authors, total = author_service.list_authors(db, skip, limit)
     author_responses = [AuthorResponse.model_validate(author) for author in authors]
     return PaginatedResponse(items=author_responses, total=total, skip=skip, limit=limit)
@@ -49,7 +54,7 @@ def get_authors(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) 
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(rate_limit(limit=120))],
 )
-def get_author(author_id: int, db: Session = Depends(get_db)) -> AuthorResponse:
+def get_author(author_id: PositivePathId, db: Session = Depends(get_db)) -> AuthorResponse:
     try:
         return author_service.get_author(db, author_id)
     except AuthorNotFoundError as e:

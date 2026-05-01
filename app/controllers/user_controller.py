@@ -7,6 +7,7 @@ from app.models.account import AccountRole
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.loan import LoanResponse
 from app.schemas.common import PaginatedResponse
+from app.schemas.params import PaginationLimit, PaginationSkip, PositivePathId
 from app.services import user_service, loan_service
 from app.services.user_service import UserAlreadyExistsError, UserHasActiveLoansError, UserNotFoundError
 
@@ -29,13 +30,17 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)) -> UserResponse
         )
 
 @router.get("/", response_model=PaginatedResponse[UserResponse], status_code=status.HTTP_200_OK)
-def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[UserResponse]:
+def list_users(
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[UserResponse]:
     users, total = user_service.list_users(db, skip, limit)
     user_responses = [UserResponse.model_validate(user) for user in users]
     return PaginatedResponse(items=user_responses, total=total, skip=skip, limit=limit)
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
-def get_user(user_id: int, db: Session = Depends(get_db)) -> UserResponse:
+def get_user(user_id: PositivePathId, db: Session = Depends(get_db)) -> UserResponse:
     try:
         return user_service.get_user_by_id(db, user_id)
     except UserNotFoundError as e:
@@ -50,7 +55,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)) -> UserResponse:
     status_code=status.HTTP_200_OK,
     dependencies=[librarian_or_admin, Depends(rate_limit(limit=20))],
 )
-def update_user(user_id: int, user_data: UserUpdate, db: Session = Depends(get_db)) -> UserResponse:
+def update_user(user_id: PositivePathId, user_data: UserUpdate, db: Session = Depends(get_db)) -> UserResponse:
     try:
         return user_service.update_user(db, user_id, user_data)
     except UserNotFoundError as e:
@@ -64,7 +69,7 @@ def update_user(user_id: int, user_data: UserUpdate, db: Session = Depends(get_d
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[librarian_or_admin, Depends(rate_limit(limit=20))],
 )
-def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
+def delete_user(user_id: PositivePathId, db: Session = Depends(get_db)) -> None:
     try:
         user_service.delete_user(db, user_id)
     except UserNotFoundError as e:
@@ -80,9 +85,9 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
 
 @router.get("/{user_id}/loans", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
 def get_user_loans(
-    user_id: int,
-    skip: int = 0,
-    limit: int = 100,
+    user_id: PositivePathId,
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[LoanResponse]:
     try:

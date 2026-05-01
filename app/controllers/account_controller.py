@@ -6,6 +6,7 @@ from app.core.rate_limit import rate_limit
 from app.models.account import AccountRole
 from app.schemas.account import AccountCreate, AccountResponse
 from app.schemas.common import PaginatedResponse
+from app.schemas.params import PaginationLimit, PaginationSkip, PositivePathId
 from app.services import account_service
 from app.services.account_service import (
     AccountAlreadyExistsError,
@@ -52,7 +53,11 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)) -> Acc
     status_code=status.HTTP_200_OK,
     dependencies=[admin_only],
 )
-def list_accounts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[AccountResponse]:
+def list_accounts(
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[AccountResponse]:
     accounts, total = account_service.list_accounts(db, skip, limit)
     account_responses = [AccountResponse.model_validate(account) for account in accounts]
     return PaginatedResponse(items=account_responses, total=total, skip=skip, limit=limit)
@@ -63,7 +68,7 @@ def list_accounts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[admin_only, Depends(rate_limit(limit=10))],
 )
-def deactivate_account(account_id: int, db: Session = Depends(get_db)) -> None:
+def deactivate_account(account_id: PositivePathId, db: Session = Depends(get_db)) -> None:
     try:
         account_service.deactivate_account(db, account_id)
     except AccountNotFoundError as e:

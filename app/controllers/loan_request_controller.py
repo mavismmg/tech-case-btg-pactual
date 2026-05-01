@@ -8,6 +8,7 @@ from app.core.rate_limit import rate_limit
 from app.models.account import Account, AccountRole
 from app.models.loan_request import LoanRequestStatus, LoanRequestType
 from app.schemas.common import PaginatedResponse
+from app.schemas.params import PaginationLimit, PaginationSkip, PositivePathId
 from app.schemas.loan_request import (
     LoanActionRequestCreate,
     LoanRequestCreate,
@@ -123,8 +124,8 @@ def create_renewal_request(
 def list_loan_requests(
     status_filter: LoanRequestStatus | None = Query(None, alias="status"),
     type_filter: LoanRequestType | None = Query(None, alias="type"),
-    skip: int = 0,
-    limit: int = 100,
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[LoanRequestResponse]:
     requests, total = loan_request_service.list_loan_requests(db, status_filter, type_filter, skip, limit)
@@ -139,7 +140,7 @@ def list_loan_requests(
     dependencies=[staff_only, Depends(rate_limit(limit=20))],
 )
 def approve_loan_request(
-    request_id: int,
+    request_id: PositivePathId,
     reviewer_account: Account = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> LoanRequestResponse:
@@ -156,7 +157,7 @@ def approve_loan_request(
     dependencies=[staff_only, Depends(rate_limit(limit=20))],
 )
 def reject_loan_request(
-    request_id: int,
+    request_id: PositivePathId,
     request_data: LoanRequestReject,
     reviewer_account: Account = Depends(get_current_account),
     db: Session = Depends(get_db),

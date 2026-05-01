@@ -8,6 +8,7 @@ from app.core.rate_limit import rate_limit
 from app.models.account import AccountRole
 from app.schemas.book import AvailableExemplarsCountResponse, BookCreate, BookResponse
 from app.schemas.common import PaginatedResponse
+from app.schemas.params import IsbnPath, PaginationLimit, PaginationSkip, PositivePathId
 from app.services import book_service
 from app.services.book_service import (
     BookAuthorNotFoundError,
@@ -45,13 +46,17 @@ def create_book(book: BookCreate, db: Session = Depends(get_db)) -> BookResponse
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(rate_limit(limit=60))],
 )
-def list_books(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[BookResponse]:
+def list_books(
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[BookResponse]:
     books, total = book_service.list_books(db, skip, limit)
     book_responses = [BookResponse.model_validate(book) for book in books]
     return PaginatedResponse(items=book_responses, total=total, skip=skip, limit=limit)
 
 @router.get("/count/{isbn}", response_model=AvailableExemplarsCountResponse, status_code=status.HTTP_200_OK)
-def count_available_exemplars(isbn: str, db: Session = Depends(get_db)) -> AvailableExemplarsCountResponse:
+def count_available_exemplars(isbn: IsbnPath, db: Session = Depends(get_db)) -> AvailableExemplarsCountResponse:
     try:
         available_exemplars = book_service.count_available_exemplars(db, isbn)
         return AvailableExemplarsCountResponse(
@@ -71,7 +76,7 @@ def count_available_exemplars(isbn: str, db: Session = Depends(get_db)) -> Avail
         )
     
 @router.get("/exemplars/{isbn}", response_model=list[BookResponse], status_code=status.HTTP_200_OK)
-def get_exemplars_by_isbn(isbn: str, db: Session = Depends(get_db)) -> Sequence[BookResponse]:
+def get_exemplars_by_isbn(isbn: IsbnPath, db: Session = Depends(get_db)) -> Sequence[BookResponse]:
     try:
         return book_service.get_exemplars_by_isbn(db, isbn)
     except BookNotFoundError as e:
@@ -86,7 +91,7 @@ def get_exemplars_by_isbn(isbn: str, db: Session = Depends(get_db)) -> Sequence[
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(rate_limit(limit=120))],
 )
-def get_book(book_id: int, db: Session = Depends(get_db)) -> BookResponse:
+def get_book(book_id: PositivePathId, db: Session = Depends(get_db)) -> BookResponse:
     try:
         return book_service.get_book(db, book_id)
     except BookNotFoundError as e:
@@ -101,7 +106,7 @@ def get_book(book_id: int, db: Session = Depends(get_db)) -> BookResponse:
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[librarian_or_admin, Depends(rate_limit(limit=10))],
 )
-def delete_book(book_id: int, db: Session = Depends(get_db)) -> None:
+def delete_book(book_id: PositivePathId, db: Session = Depends(get_db)) -> None:
     try:
         book_service.delete_book(db, book_id)
     except BookNotFoundError as e:

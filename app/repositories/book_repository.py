@@ -75,6 +75,12 @@ def count_exemplars_by_isbn(db: Session, isbn: str) -> int:
 
     return db.query(Book).filter(Book.isbn == isbn, Book.is_available.is_(True), Book.deleted_at.is_(None)).count()
 
+
+def count_active_books_by_isbn(db: Session, isbn: str) -> int:
+    logger.info(f"Counting active books for ISBN: {isbn}")
+
+    return db.query(Book).filter(Book.isbn == isbn, Book.deleted_at.is_(None)).count()
+
 def get_exemplars_by_isbn(db: Session, isbn: str) -> list[Book]:
     logger.info(f"Fetching exemplars for ISBN: {isbn}")
 

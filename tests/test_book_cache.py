@@ -43,6 +43,7 @@ def test_count_available_exemplars_uses_cache(db, monkeypatch):
         return 2
 
     monkeypatch.setattr(book_service, "cache", fake_cache)
+    monkeypatch.setattr(book_service.book_repository, "count_active_books_by_isbn", lambda db, isbn: 2)
     monkeypatch.setattr(book_service.book_repository, "count_exemplars_by_isbn", fake_count)
 
     assert book_service.count_available_exemplars(db, "1234567890") == 2

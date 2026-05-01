@@ -18,8 +18,8 @@ BOOK_LIST_CACHE_PREFIX = "books:list:"
 BOOK_CACHE_TTL_SECONDS = 60
 
 class BookNotFoundError(Exception):
-    def __init__(self, book_id: int):
-        self.message = f"Book with ID {book_id} not found."
+    def __init__(self, book_identifier: int | str, identifier_label: str = "ID"):
+        self.message = f"Book with {identifier_label} {book_identifier} not found."
         super().__init__(self.message)
 
 class BookAuthorNotFoundError(Exception):
@@ -277,6 +277,13 @@ def delete_book(db: Session, book_id: int) -> Book:
 def count_available_exemplars(db: Session, isbn: str) -> int:
     logger.debug("Counting available exemplars", extra={"operation": "count_available_exemplars", "isbn": isbn})
 
+    if book_repository.count_active_books_by_isbn(db, isbn) == 0:
+        logger.warning(
+            "Available exemplars count blocked because ISBN was not found",
+            extra={"operation": "count_available_exemplars", "isbn": isbn, "reason": "isbn_not_found"},
+        )
+        raise BookNotFoundError(isbn, "ISBN")
+
     cache_key = _available_count_cache_key(isbn)
     cached_count = cache.get_json(cache_key)
     if cached_count is not None:
@@ -288,6 +295,13 @@ def count_available_exemplars(db: Session, isbn: str) -> int:
 
 def get_exemplars_by_isbn(db: Session, isbn: str) -> list[Book]:
     logger.debug("Fetching exemplars by ISBN", extra={"operation": "get_exemplars_by_isbn", "isbn": isbn})
+
+    if book_repository.count_active_books_by_isbn(db, isbn) == 0:
+        logger.warning(
+            "Available exemplars fetch blocked because ISBN was not found",
+            extra={"operation": "get_exemplars_by_isbn", "isbn": isbn, "reason": "isbn_not_found"},
+        )
+        raise BookNotFoundError(isbn, "ISBN")
 
     cache_key = _available_exemplars_cache_key(isbn)
     cached_exemplars = cache.get_json(cache_key)

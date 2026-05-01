@@ -7,6 +7,7 @@ from app.models.account import AccountRole
 from app.models.loan import LoanStatus
 from app.schemas.common import PaginatedResponse
 from app.schemas.loan import LoanResponse
+from app.schemas.params import PaginationLimit, PaginationSkip, PositivePathId, PositiveQueryId
 from app.services import loan_service
 from app.services.loan_service import (
     LoanAlreadyReturnedError,
@@ -26,7 +27,11 @@ librarian_or_admin = Depends(require_roles(AccountRole.ADMIN, AccountRole.LIBRAR
     status_code=status.HTTP_201_CREATED,
     dependencies=[librarian_or_admin, Depends(rate_limit(limit=5))],
 )
-def create_loan(user_id: int, book_id: int, db: Session = Depends(get_db)) -> LoanResponse:
+def create_loan(
+    user_id: PositiveQueryId,
+    book_id: PositiveQueryId,
+    db: Session = Depends(get_db),
+) -> LoanResponse:
     try:
         return loan_service.create_loan(db, user_id, book_id)
     
@@ -62,10 +67,10 @@ def _loan_page(loans, total: int, skip: int, limit: int) -> PaginatedResponse[Lo
 @router.get("/", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
 def list_loans(
     status_filter: LoanStatus | None = Query(None, alias="status"),
-    user_id: int | None = Query(None, gt=0),
+    user_id: PositiveQueryId | None = None,
     overdue: bool | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[LoanResponse]:
     loans, total = loan_service.list_loans(db, skip, limit, status_filter, user_id, overdue)
@@ -74,8 +79,8 @@ def list_loans(
 
 @router.get("/active", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
 def list_active_loans(
-    skip: int = 0,
-    limit: int = 100,
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[LoanResponse]:
     loans, total = loan_service.list_active_loans(db, skip, limit)
@@ -84,8 +89,8 @@ def list_active_loans(
 
 @router.get("/overdue", response_model=PaginatedResponse[LoanResponse], status_code=status.HTTP_200_OK)
 def list_overdue_loans(
-    skip: int = 0,
-    limit: int = 100,
+    skip: PaginationSkip = 0,
+    limit: PaginationLimit = 100,
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[LoanResponse]:
     loans, total = loan_service.list_overdue_loans(db, skip, limit)
@@ -93,7 +98,7 @@ def list_overdue_loans(
 
 
 @router.get("/{loan_id}", response_model=LoanResponse, status_code=status.HTTP_200_OK)
-def get_loan(loan_id: int, db: Session = Depends(get_db)) -> LoanResponse:
+def get_loan(loan_id: PositivePathId, db: Session = Depends(get_db)) -> LoanResponse:
     try:
         return loan_service.get_loan_by_id(db, loan_id)
     except LoanNotFoundError as e:
@@ -108,7 +113,7 @@ def get_loan(loan_id: int, db: Session = Depends(get_db)) -> LoanResponse:
     status_code=status.HTTP_200_OK,
     dependencies=[librarian_or_admin, Depends(rate_limit(limit=5))],
 )
-def return_loan(loan_id: int, db: Session = Depends(get_db)) -> LoanResponse:
+def return_loan(loan_id: PositivePathId, db: Session = Depends(get_db)) -> LoanResponse:
     try:
         return loan_service.return_loan(db, loan_id)
     except LoanNotFoundError as e:
