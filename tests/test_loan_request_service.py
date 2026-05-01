@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from app.models.account import AccountRole
+from app.models.loan_operation_metric import LoanMetricOperation, LoanOperationMetric
 from app.models.loan_request import LoanRequestStatus, LoanRequestType
 from app.repositories.loan_repository import get_active_loans_count_by_user_id
 from app.schemas.account import AccountCreate
@@ -75,6 +76,17 @@ def test_reader_creates_pending_loan_request(db):
     assert loan_request.user_id == user.id
     assert loan_request.book_id == book.id
 
+    metric = (
+        db.query(LoanOperationMetric)
+        .filter(
+            LoanOperationMetric.operation == LoanMetricOperation.LOAN_REQUEST_CREATED.value,
+            LoanOperationMetric.loan_request_id == loan_request.id,
+        )
+        .one()
+    )
+    assert metric.user_id == user.id
+    assert metric.book_id == book.id
+
 
 def test_reader_cannot_create_duplicate_pending_loan_request(db):
     _, reader = _reader_account(db)
@@ -99,6 +111,16 @@ def test_staff_approves_loan_request_and_creates_active_loan(db):
     db.refresh(book)
     assert book.is_available is False
 
+    approval_metric = (
+        db.query(LoanOperationMetric)
+        .filter(
+            LoanOperationMetric.operation == LoanMetricOperation.LOAN_REQUEST_APPROVED.value,
+            LoanOperationMetric.loan_request_id == approved_request.id,
+        )
+        .one()
+    )
+    assert approval_metric.reviewer_account_id == staff.id
+
 
 def test_staff_rejects_loan_request_without_creating_loan(db):
     user, reader = _reader_account(db)
@@ -113,6 +135,16 @@ def test_staff_rejects_loan_request_without_creating_loan(db):
     assert get_active_loans_count_by_user_id(db, user.id) == 0
     db.refresh(book)
     assert book.is_available is True
+
+    rejection_metric = (
+        db.query(LoanOperationMetric)
+        .filter(
+            LoanOperationMetric.operation == LoanMetricOperation.LOAN_REQUEST_REJECTED.value,
+            LoanOperationMetric.loan_request_id == rejected_request.id,
+        )
+        .one()
+    )
+    assert rejection_metric.reviewer_account_id == staff.id
 
 
 def test_staff_approves_return_request_and_returns_loan(db):
@@ -130,6 +162,16 @@ def test_staff_approves_return_request_and_returns_loan(db):
     db.refresh(book)
     assert book.is_available is True
 
+    return_metric = (
+        db.query(LoanOperationMetric)
+        .filter(
+            LoanOperationMetric.operation == LoanMetricOperation.LOAN_RETURNED.value,
+            LoanOperationMetric.loan_id == loan.id,
+        )
+        .one()
+    )
+    assert return_metric.fine_value == 0.0
+
 
 def test_staff_approves_renewal_request_and_extends_loan(db):
     user, reader = _reader_account(db)
@@ -145,6 +187,16 @@ def test_staff_approves_renewal_request_and_extends_loan(db):
     db.refresh(loan)
     assert loan.expected_return_date == original_expected_return_date + timedelta(days=14)
     assert loan.renewal_count == 1
+
+    renewal_metric = (
+        db.query(LoanOperationMetric)
+        .filter(
+            LoanOperationMetric.operation == LoanMetricOperation.LOAN_RENEWED.value,
+            LoanOperationMetric.loan_id == loan.id,
+        )
+        .one()
+    )
+    assert renewal_metric.user_id == user.id
 
 
 def test_second_renewal_is_blocked(db):

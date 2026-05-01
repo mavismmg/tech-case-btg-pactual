@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 
 from app.models.account import Account, AccountRole
 from app.models.loan import LoanStatus
+from app.models.loan_operation_metric import LoanMetricOperation
 from app.models.loan_request import LoanRequest, LoanRequestStatus, LoanRequestType
 from app.repositories import book_repository, loan_repository, loan_request_repository
-from app.services import loan_service
+from app.services import loan_operation_metric_service, loan_service
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,14 @@ def create_loan_request(db: Session, account: Account, book_id: int) -> LoanRequ
         book_id=book_id,
     )
     created_request = loan_request_repository.create_loan_request(db, loan_request)
+    loan_operation_metric_service.record_loan_operation(
+        db,
+        LoanMetricOperation.LOAN_REQUEST_CREATED,
+        loan_request_id=created_request.id,
+        user_id=created_request.user_id,
+        book_id=created_request.book_id,
+        account_id=created_request.requester_account_id,
+    )
     logger.info(
         "Loan request created successfully",
         extra={
@@ -175,6 +184,15 @@ def create_loan_action_request(
         loan_id=loan_id,
     )
     created_request = loan_request_repository.create_loan_request(db, loan_request)
+    loan_operation_metric_service.record_loan_operation(
+        db,
+        LoanMetricOperation.LOAN_REQUEST_CREATED,
+        loan_id=created_request.loan_id,
+        loan_request_id=created_request.id,
+        user_id=created_request.user_id,
+        book_id=created_request.book_id,
+        account_id=created_request.requester_account_id,
+    )
     logger.info(
         "Loan request created successfully",
         extra={
@@ -236,6 +254,16 @@ def approve_loan_request(db: Session, request_id: int, reviewer_account: Account
         raise LoanRequestApprovalError(str(exc)) from exc
 
     approved_request = loan_request_repository.mark_approved(db, loan_request, reviewer_account.id)
+    loan_operation_metric_service.record_loan_operation(
+        db,
+        LoanMetricOperation.LOAN_REQUEST_APPROVED,
+        loan_id=approved_request.loan_id,
+        loan_request_id=approved_request.id,
+        user_id=approved_request.user_id,
+        book_id=approved_request.book_id,
+        account_id=approved_request.requester_account_id,
+        reviewer_account_id=reviewer_account.id,
+    )
     logger.info(
         "Loan request approved successfully",
         extra={
@@ -267,6 +295,16 @@ def reject_loan_request(
         raise LoanRequestAlreadyReviewedError(request_id)
 
     rejected_request = loan_request_repository.mark_rejected(db, loan_request, reviewer_account.id, reason)
+    loan_operation_metric_service.record_loan_operation(
+        db,
+        LoanMetricOperation.LOAN_REQUEST_REJECTED,
+        loan_id=rejected_request.loan_id,
+        loan_request_id=rejected_request.id,
+        user_id=rejected_request.user_id,
+        book_id=rejected_request.book_id,
+        account_id=rejected_request.requester_account_id,
+        reviewer_account_id=reviewer_account.id,
+    )
     logger.info(
         "Loan request rejected successfully",
         extra={

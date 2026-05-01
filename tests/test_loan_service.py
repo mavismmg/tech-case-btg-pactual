@@ -4,7 +4,9 @@ from enum import Enum
 
 import pytest
 import app.services.loan_service as loan_service_module
+import app.services.loan_operation_metric_service as loan_metric_service_module
 from app.models.loan import LoanStatus
+from app.models.loan_operation_metric import LoanMetricOperation, LoanOperationMetric
 from app.services.user_service import create_user
 from app.services.author_service import create_author
 from app.services.book_service import create_book
@@ -74,6 +76,11 @@ def test_create_loan(db, caplog):
     assert log_record.book_id == book.id
     assert log_record.loan_id == loan.id
 
+    metric = db.query(LoanOperationMetric).filter(LoanOperationMetric.operation == "loan_created").one()
+    assert metric.loan_id == loan.id
+    assert metric.user_id == user.id
+    assert metric.book_id == book.id
+
 def test_return_loan(db):
     user_data = UserCreate(name="Test User", email="test@example.com")
     user = create_user(db, user_data)
@@ -87,16 +94,58 @@ def test_return_loan(db):
     loan = create_loan(db, user.id, book.id)
     
     returned_loan = return_loan(db, loan.id)
-    
+
     assert returned_loan.status == LoanStatusMock.RETURNED
     assert returned_loan.actual_return_date is not None
     assert returned_loan.fine_value == 0.0
+    return_metric = (
+        db.query(LoanOperationMetric)
+        .filter(
+            LoanOperationMetric.operation == LoanMetricOperation.LOAN_RETURNED.value,
+            LoanOperationMetric.loan_id == loan.id,
+        )
+        .one()
+    )
+    assert return_metric.fine_value == 0.0
 
     second_loan = create_loan(db, user.id, book.id)
     second_returned_loan = return_loan(db, second_loan.id)
 
     assert second_returned_loan.status == LoanStatusMock.RETURNED
     assert second_returned_loan.actual_return_date is not None
+
+
+def test_loan_metric_failure_does_not_block_loan_creation(db, monkeypatch, caplog):
+    user = create_user(db, UserCreate(name="Metric User", email="metric@example.com"))
+    author = create_author(db, AuthorCreate(name="Metric Author"))
+    book = create_book(
+        db,
+        BookCreate(
+            isbn="1234567890",
+            author_id=author.id,
+            title="Metric Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+
+    def fail_to_create_metric(*args, **kwargs):
+        raise RuntimeError("metrics table unavailable")
+
+    monkeypatch.setattr(
+        loan_metric_service_module.loan_operation_metric_repository,
+        "create_metric",
+        fail_to_create_metric,
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.services.loan_operation_metric_service"):
+        loan = create_loan(db, user.id, book.id)
+
+    assert loan.id is not None
+    assert loan.status == LoanStatusMock.ACTIVE
+    warning_record = next(
+        record for record in caplog.records if record.message == "Loan operation metric recording failed"
+    )
+    assert warning_record.metric_operation == LoanMetricOperation.LOAN_CREATED.value
 
 def test_return_loan_already_returned(db, caplog):
     user_data = UserCreate(name="Test User", email="test@example.com")

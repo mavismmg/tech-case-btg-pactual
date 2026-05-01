@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Library API - Tech Case BTG Pactual",
-    "description": "Fluxo principal da API de biblioteca digital: bootstrap, login, cadastro de dados, solicitação/aprovação de empréstimo, consulta de ativos e devolução.",
+    "description": "Fluxo principal da API de biblioteca digital: bootstrap, login, cadastro de dados, solicitação/aprovação de empréstimo, consulta de ativos, devolução e métricas operacionais.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -351,6 +351,19 @@
           }
         ],
         "url": "{{base_url}}/users/{{user_id}}/loans?skip=0&limit=100"
+      }
+    },
+    {
+      "name": "Loan Metrics",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/metrics/loans"
       }
     }
   ]

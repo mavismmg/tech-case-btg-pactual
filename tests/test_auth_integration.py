@@ -147,6 +147,46 @@ def test_auth_flow_create_and_return_loan(client):
     assert return_response.status_code == 200
     assert return_response.json()["status"] == "returned"
 
+    metrics_response = client.get("/metrics/loans", headers=headers)
+    assert metrics_response.status_code == 200
+    assert metrics_response.json()["total_loans"] == 1
+    assert metrics_response.json()["returned_loans"] == 1
+    assert metrics_response.json()["events_by_operation"]["loan_created"] == 1
+    assert metrics_response.json()["events_by_operation"]["loan_returned"] == 1
+
+
+def test_loan_metrics_endpoint_is_restricted_to_staff(client, db):
+    _bootstrap_admin(client)
+    admin_token = _login(client)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    user_response = client.post(
+        "/users/",
+        json={"name": "Reader", "email": "reader@example.com"},
+        headers=admin_headers,
+    )
+    assert user_response.status_code == 201
+
+    create_account(
+        db,
+        AccountCreate(
+            name="Reader Account",
+            email="reader-account@example.com",
+            password="strong-password",
+            role=AccountRole.READER,
+            user_id=user_response.json()["id"],
+        ),
+    )
+    reader_token = _login(client, "reader-account@example.com")
+    reader_headers = {"Authorization": f"Bearer {reader_token}"}
+
+    reader_response = client.get("/metrics/loans", headers=reader_headers)
+    assert reader_response.status_code == 403
+
+    admin_response = client.get("/metrics/loans", headers=admin_headers)
+    assert admin_response.status_code == 200
+    assert admin_response.json()["events_by_operation"] == {}
+
 
 def test_list_active_and_overdue_loans_endpoints(client, db):
     _bootstrap_admin(client)

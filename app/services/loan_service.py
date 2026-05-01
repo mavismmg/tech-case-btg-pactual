@@ -5,8 +5,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.core.cache import redis_lock
 from app.models.loan import Loan, LoanStatus
+from app.models.loan_operation_metric import LoanMetricOperation
 from app.repositories import loan_repository, book_repository, user_repository
 from app.services.book_service import invalidate_available_exemplars_cache
+from app.services import loan_operation_metric_service
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +195,13 @@ def create_loan(db: Session, user_id: int, book_id: int) -> Loan:
         if book_isbn is not None:
             invalidate_available_exemplars_cache(book_isbn)
         db.refresh(new_loan)
+        loan_operation_metric_service.record_loan_operation(
+            db,
+            LoanMetricOperation.LOAN_CREATED,
+            loan_id=new_loan.id,
+            user_id=new_loan.user_id,
+            book_id=new_loan.book_id,
+        )
     except BUSINESS_RULE_EXCEPTIONS:
         db.rollback()
         raise
@@ -273,6 +282,14 @@ def return_loan(db: Session, loan_id: int) -> Loan:
         if book_isbn is not None:
             invalidate_available_exemplars_cache(book_isbn)
         db.refresh(loan)
+        loan_operation_metric_service.record_loan_operation(
+            db,
+            LoanMetricOperation.LOAN_RETURNED,
+            loan_id=loan.id,
+            user_id=loan.user_id,
+            book_id=loan.book_id,
+            fine_value=loan.fine_value,
+        )
     except BUSINESS_RULE_EXCEPTIONS:
         db.rollback()
         raise
@@ -349,6 +366,13 @@ def renew_loan(db: Session, loan_id: int) -> Loan:
             loan.renewal_count += 1
 
         db.refresh(loan)
+        loan_operation_metric_service.record_loan_operation(
+            db,
+            LoanMetricOperation.LOAN_RENEWED,
+            loan_id=loan.id,
+            user_id=loan.user_id,
+            book_id=loan.book_id,
+        )
     except BUSINESS_RULE_EXCEPTIONS:
         db.rollback()
         raise
