@@ -26,6 +26,7 @@ O projeto foi mantido simples de rodar localmente com Docker Compose, mas sem ab
 - [Banco de Dados e Inicialização](#banco-de-dados-e-inicialização)
 - [Como Rodar Localmente](#como-rodar-localmente)
 - [Como Rodar os Testes](#como-rodar-os-testes)
+- [Testes Manuais de QA](#testes-manuais-de-qa)
 - [Padrão de Código](#padrão-de-código)
 - [Endpoints Principais](#endpoints-principais)
 - [Exemplos de Uso](#exemplos-de-uso)
@@ -713,6 +714,14 @@ pytest
 ```
 
 Os testes usam `TEST_DATABASE_URL` e recriam as tabelas durante a execução das fixtures.
+
+## Testes Manuais de QA
+
+Além dos testes automatizados, foi executado um roteiro manual de QA cobrindo autenticação, autorização, usuários, catálogo, empréstimos, solicitações, métricas, health check, cache, rate limit e concorrência.
+
+O relatório completo está em [docs/manual-qa-report.md](docs/manual-qa-report.md).
+
+Durante a execução manual foram encontradas falhas de borda em validação de IDs, paginação e consulta de ISBN inexistente. Esses pontos foram corrigidos e revalidados: parâmetros inválidos retornam `422`, ISBN válido inexistente retorna `404`, ISBN existente sem disponibilidade retorna `200` com zero/lista vazia, e solicitação de empréstimo por `reader` para livro existente retorna `201 pending`.
 
 ## Padrão de Código
 
