@@ -122,6 +122,30 @@ def test_book_creation_allows_same_title_for_different_authors(client, admin_hea
     assert second_response.status_code == 201
 
 
+def test_book_creation_rejects_same_isbn_with_different_author(client, admin_headers):
+    first_author_response = client.post("/authors/", json={"name": "First ISBN API Author"}, headers=admin_headers)
+    second_author_response = client.post("/authors/", json={"name": "Second ISBN API Author"}, headers=admin_headers)
+    assert first_author_response.status_code == 201
+    assert second_author_response.status_code == 201
+
+    payload = {
+        "isbn": "1234567890",
+        "author_id": first_author_response.json()["id"],
+        "title": "ISBN Conflict API Book",
+        "published_date": "2023-01-01",
+    }
+    assert client.post("/books/", json=payload, headers=admin_headers).status_code == 201
+
+    conflict_response = client.post(
+        "/books/",
+        json={**payload, "author_id": second_author_response.json()["id"]},
+        headers=admin_headers,
+    )
+
+    assert conflict_response.status_code == 409
+    assert conflict_response.json()["detail"] == "ISBN already exists for a different book metadata."
+
+
 def test_author_endpoints_reject_duplicates_and_support_pagination(client, admin_headers):
     response = client.post("/authors/", json={"name": "Duplicate Author"}, headers=admin_headers)
     assert response.status_code == 201
