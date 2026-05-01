@@ -33,6 +33,12 @@ class BookCreationError(Exception):
         super().__init__(self.message)
 
 
+class BookTitleIsbnConflictError(Exception):
+    def __init__(self) -> None:
+        self.message = "Book title already exists for this author with a different ISBN."
+        super().__init__(self.message)
+
+
 class BookHasActiveLoansError(Exception):
     def __init__(self, book_id: int):
         self.message = f"Cannot delete book with ID {book_id}. Book has active loans."
@@ -168,6 +174,25 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 
         raise BookAuthorNotFoundError(book_data.author_id)
 
+    existing_book_with_title = book_repository.get_active_book_by_author_and_title(
+        db,
+        book_data.author_id,
+        book_data.title,
+    )
+    if existing_book_with_title is not None and existing_book_with_title.isbn != book_data.isbn:
+        logger.warning(
+            "Book creation blocked because title already exists for author with another ISBN",
+            extra={
+                "operation": operation,
+                "author_id": book_data.author_id,
+                "title": book_data.title,
+                "existing_isbn": existing_book_with_title.isbn,
+                "requested_isbn": book_data.isbn,
+                "reason": "title_isbn_conflict",
+            },
+        )
+        raise BookTitleIsbnConflictError()
+
     try:
         new_book = book_repository.create_book(db, book_data)
         invalidate_available_exemplars_cache(new_book.isbn)
@@ -184,7 +209,7 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 
         return new_book
 
-    except BookAuthorNotFoundError:
+    except (BookAuthorNotFoundError, BookTitleIsbnConflictError):
         raise
     except Exception as e:
         logger.exception(

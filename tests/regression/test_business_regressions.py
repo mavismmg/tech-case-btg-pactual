@@ -75,3 +75,30 @@ def test_pagination_contract_and_invalid_values(client, user_factory):
     assert client.get("/users/", params={"skip": -1}).status_code == 422
     assert client.get("/users/", params={"limit": 0}).status_code == 422
     assert client.get("/users/", params={"limit": 101}).status_code == 422
+
+
+def test_book_availability_endpoints_continue_grouping_exemplars_by_isbn(client, admin_headers):
+    author_response = client.post("/authors/", json={"name": "Grouped ISBN Author"}, headers=admin_headers)
+    assert author_response.status_code == 201
+
+    payload = {
+        "isbn": "1234567890",
+        "author_id": author_response.json()["id"],
+        "title": "Grouped ISBN Book",
+        "published_date": "2023-01-01",
+    }
+    first_response = client.post("/books/", json=payload, headers=admin_headers)
+    second_response = client.post("/books/", json=payload, headers=admin_headers)
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+
+    count_response = client.get("/books/count/1234567890")
+    assert count_response.status_code == 200
+    assert count_response.json()["available_exemplars"] == 2
+
+    exemplars_response = client.get("/books/exemplars/1234567890")
+    assert exemplars_response.status_code == 200
+    assert {book["id"] for book in exemplars_response.json()} == {
+        first_response.json()["id"],
+        second_response.json()["id"],
+    }
