@@ -23,6 +23,7 @@ O projeto foi mantido simples de rodar localmente com Docker Compose, mas sem ab
 - [Banco de Dados e Inicialização](#banco-de-dados-e-inicialização)
 - [Como Rodar Localmente](#como-rodar-localmente)
 - [Como Rodar os Testes](#como-rodar-os-testes)
+- [Padrão de Código](#padrão-de-código)
 - [Endpoints Principais](#endpoints-principais)
 - [Exemplos de Uso](#exemplos-de-uso)
 - [Collection Postman](#collection-postman)
@@ -558,6 +559,34 @@ pytest
 ```
 
 Os testes usam `TEST_DATABASE_URL` e recriam as tabelas durante a execução das fixtures.
+
+## Padrão de Código
+
+O projeto usa Ruff como formatter e linter. A ideia é ter um padrão simples, parecido com Prettier.
+
+Para verificar lint:
+
+```bash
+make lint
+```
+
+Para aplicar formatação:
+
+```bash
+make format
+```
+
+Para rodar lint e testes juntos:
+
+```bash
+make check
+```
+
+Antes de entregar ou abrir uma contribuição, o fluxo recomendado é rodar `make lint` e `venv/bin/pytest`. Se o objetivo for aplicar correções automáticas seguras de lint, use:
+
+```bash
+make lint-fix
+```
 
 ## Endpoints Principais
 
