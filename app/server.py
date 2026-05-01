@@ -1,10 +1,14 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
+from fastapi import FastAPI
+
 from app.core.logging import configure_logging
 
 load_dotenv()
 configure_logging()
 
+from app.services.notification_scheduler import DueLoanNotificationScheduler
 from app.controllers import user_controller
 from app.controllers import book_controller
 from app.controllers import loan_controller
@@ -14,8 +18,22 @@ from app.controllers import account_controller
 from app.controllers import loan_request_controller
 from app.controllers import health_controller
 from app.controllers import metrics_controller
+from app.controllers import notification_controller
 
-app = FastAPI(title="Library API")
+
+notification_scheduler = DueLoanNotificationScheduler()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    notification_scheduler.start()
+    try:
+        yield
+    finally:
+        notification_scheduler.stop()
+
+
+app = FastAPI(title="Library API", lifespan=lifespan)
 
 app.include_router(auth_controller.router)
 app.include_router(health_controller.router)
@@ -26,3 +44,4 @@ app.include_router(loan_controller.router)
 app.include_router(loan_request_controller.router)
 app.include_router(author_controller.router)
 app.include_router(metrics_controller.router)
+app.include_router(notification_controller.router)
