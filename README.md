@@ -287,6 +287,18 @@ erDiagram
 | `LoanRequest` | Solicitação de empréstimo, devolução ou renovação, revisada por staff. |
 | `LoanOperationMetric` | Registro operacional de eventos relevantes do ciclo de empréstimos. |
 
+### Nota sobre `Book`, ISBN e atualização de catálogo
+
+No projeto, `Book` representa um exemplar físico/digital do acervo. O `isbn` é o identificador bibliográfico do livro, usado no mercado editorial para identificar uma edição específica de uma obra. Em termos práticos, ele ajuda a agrupar exemplares do mesmo livro e permite consultar disponibilidade por ISBN.
+
+Por esse motivo, a API não expõe um endpoint público para alterar `isbn`, `title`, `author_id` ou `published_date` depois que o livro foi cadastrado. Se esses dados fossem editados livremente, o histórico poderia ficar ambíguo: por exemplo, um empréstimo antigo poderia passar a apontar para um livro com outro ISBN ou outro título.
+
+Para preservar rastreabilidade, o catálogo segue uma abordagem mais conservadora:
+
+- dados bibliográficos são definidos na criação do livro;
+- remoção usa soft delete, mantendo o registro histórico no banco;
+- `is_available` é alterado pelo próprio fluxo de empréstimo/devolução, não por update manual do catálogo.
+
 ### Nota sobre `User`, `Account` e `reader`
 
 O enunciado usa "usuário" para representar a pessoa que utiliza a biblioteca. No projeto, essa ideia foi separada em duas partes:
@@ -718,6 +730,7 @@ make lint-fix
 | `POST` | `/books/` | Cria livro vinculado a autor. Requer `admin` ou `librarian`. |
 | `GET` | `/books/` | Lista livros. |
 | `GET` | `/books/{book_id}` | Busca livro por ID. |
+| `DELETE` | `/books/{book_id}` | Remove livro logicamente. Requer `admin` ou `librarian`. |
 | `GET` | `/books/count/{isbn}` | Conta exemplares disponíveis por ISBN. |
 | `GET` | `/books/exemplars/{isbn}` | Lista exemplares disponíveis por ISBN. |
 
@@ -920,6 +933,7 @@ Ela cobre o fluxo que eu usaria para avaliar rapidamente a API: bootstrap, login
 - **`create_all` em vez de Alembic**: simplifica o setup local do case. Para produção, eu migraria para Alembic.
 - **Cache com TTL curto**: melhora leituras frequentes sem exigir uma política pesada de invalidação.
 - **Locks Redis no empréstimo**: reduzem o risco de concorrência ao tentar emprestar o mesmo livro ou atingir o limite de um usuário.
+- **Catálogo sem update bibliográfico**: livros podem ser removidos logicamente, mas ISBN/título/autor não são editados por endpoint público para preservar histórico de empréstimos.
 - **Métricas no banco**: deixam a avaliação local simples e dão visibilidade ao fluxo de empréstimos sem exigir Prometheus/Grafana no setup.
 - **Rate limiting fail-open**: uma falha no Redis não derruba a API, mas reduz temporariamente a proteção contra abuso.
 - **Exceções de domínio**: deixam as regras de negócio nos services e a tradução HTTP nos controllers.
