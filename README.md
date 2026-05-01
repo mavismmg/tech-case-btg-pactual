@@ -23,6 +23,7 @@ O projeto foi mantido simples de rodar localmente com Docker Compose, mas sem ab
 - [Logging](#logging)
 - [Health Check](#health-check)
 - [Métricas Operacionais](#métricas-operacionais)
+- [Notificações de Vencimento](#notificações-de-vencimento)
 - [Banco de Dados e Inicialização](#banco-de-dados-e-inicialização)
 - [Como Rodar Localmente](#como-rodar-localmente)
 - [Como Rodar os Testes](#como-rodar-os-testes)
@@ -68,6 +69,7 @@ No desenho atual, o domínio foi dividido em:
 - Paginação em listagens principais com `skip` e `limit`.
 - Cache Redis para consultas frequentes.
 - Rate limiting por rota e identidade do cliente.
+- Notificações de vencimento por endpoint manual, email fake e webhook HTTP configurável.
 - Logging estruturado em JSON.
 - Health check com verificação básica de banco e Redis.
 - Métricas operacionais de empréstimos registradas no PostgreSQL.
@@ -572,6 +574,44 @@ Exemplo de resposta:
 
 O registro dessas métricas é best effort: se a gravação da métrica falhar, a aplicação registra um warning, mas não desfaz uma operação de empréstimo já concluída. Em produção, uma evolução natural seria exportar esses sinais para Prometheus/Grafana ou outra solução de observabilidade.
 
+## Notificações de Vencimento
+
+A API também possui notificações de vencimento para empréstimos ativos que vencem em uma janela configurável. O disparo pode ser manual por endpoint ou automático por scheduler no startup da aplicação.
+
+O endpoint manual é restrito a `admin` e `librarian`:
+
+```text
+POST /notifications/due-loans/send?days_ahead=1&channel=all
+```
+
+Parâmetros:
+
+- `days_ahead`: janela em dias, de `0` a `30`. O padrão é `1`.
+- `channel`: `email`, `webhook` ou `all`. O padrão é `all`.
+
+O email é fake: a aplicação monta e registra o conteúdo da entrega, mas não usa SMTP. O webhook faz um `POST` HTTP real para `DUE_LOAN_WEBHOOK_URL`, com timeout curto. Quando a URL não está configurada ou o webhook falha, a falha é registrada de forma controlada na resposta e no histórico de notificações.
+
+Para evitar reenvios duplicados, cada tentativa é persistida em `loan_due_notifications` com idempotência por empréstimo, canal e data da notificação. O scheduler automático usa lock Redis para evitar duplicidade quando a API roda com múltiplos processos ou réplicas.
+
+Configurações:
+
+```env
+DUE_LOAN_NOTIFICATIONS_ENABLED=false
+DUE_LOAN_NOTIFICATION_INTERVAL_SECONDS=3600
+DUE_LOAN_NOTIFICATION_DAYS_AHEAD=1
+DUE_LOAN_WEBHOOK_URL=https://example.com/webhook
+```
+
+O scheduler fica desligado por padrão por decisão consciente:
+
+```env
+DUE_LOAN_NOTIFICATIONS_ENABLED=false
+```
+
+Notificações automáticas podem virar um ponto crítico se forem implementadas sem cuidado. Em uma API com múltiplos workers, réplicas ou restarts frequentes, uma rotina mal protegida pode enviar mensagens duplicadas, consumir recursos do processo web, bater repetidamente em serviços externos ou ocultar falhas de entrega. Por isso, mesmo no case, a implementação usa histórico persistido por empréstimo/canal/data e lock Redis no scheduler.
+
+Esse diferencial foi implementado porque houve tempo para modelar, testar e validar o comportamento com segurança mínima. Para produção, eu evoluiria essa abordagem com um provedor SMTP real para email, webhook real com autenticação/assinatura, retries com backoff, fila assíncrona, dead-letter/monitoramento, métricas de entrega e alertas. O modo fake de email fica intencionalmente limitado ao contexto do case e de testes locais.
+
 ## Banco de Dados e Inicialização
 
 O schema do banco é versionado com Alembic. Em runtime, a aplicação não executa `Base.metadata.create_all`; as tabelas, índices e constraints são criados por migrations.
@@ -620,6 +660,10 @@ JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 RATE_LIMIT_ENABLED=true
 LOG_PRETTY_JSON=true
+DUE_LOAN_NOTIFICATIONS_ENABLED=false
+DUE_LOAN_NOTIFICATION_INTERVAL_SECONDS=3600
+DUE_LOAN_NOTIFICATION_DAYS_AHEAD=1
+DUE_LOAN_WEBHOOK_URL=
 ```
 
 ### Subir API, Banco e Redis
@@ -857,6 +901,12 @@ Filtros disponíveis em `GET /loans/`:
 | `GET` | `/metrics/loans` | Retorna resumo operacional de empréstimos. Requer `admin` ou `librarian`. |
 | `GET` | `/metrics/loans/export.csv` | Exporta eventos operacionais de empréstimos em CSV. Requer `admin` ou `librarian`. |
 
+### Notificações
+
+| Método | Endpoint | Descrição |
+| --- | --- | --- |
+| `POST` | `/notifications/due-loans/send` | Dispara notificações de vencimento por email fake, webhook real ou ambos. Requer `admin` ou `librarian`. |
+
 ## Exemplos de Uso
 
 ### 1. Bootstrap do Administrador
@@ -1009,6 +1059,13 @@ curl http://localhost:8000/metrics/loans/export.csv \
   -o loan_operation_metrics.csv
 ```
 
+### 16. Disparar Notificações de Vencimento
+
+```bash
+curl -X POST "http://localhost:8000/notifications/due-loans/send?days_ahead=1&channel=all" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ## Collection Postman
 
 A collection Postman está disponível em:
@@ -1035,6 +1092,5 @@ Ela cobre o fluxo que eu usaria para avaliar rapidamente a API: bootstrap, login
 ## Melhorias Futuras
 
 - Evoluir métricas para Prometheus/Grafana, com dashboards e alertas.
-- Implementar notificações de vencimento por email ou webhook.
 - Padronizar completamente a nomenclatura pública entre `reader` e `user`, se desejado.
 - Expandir testes de integração para mais cenários de autorização e concorrência.
