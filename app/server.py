@@ -1,5 +1,11 @@
 from fastapi import FastAPI
 from sqlalchemy import text
+from dotenv import load_dotenv
+from app.core.logging import configure_logging
+
+load_dotenv()
+configure_logging()
+
 from app.core.database import Base, engine
 from app.models import account
 from app.controllers import user_controller

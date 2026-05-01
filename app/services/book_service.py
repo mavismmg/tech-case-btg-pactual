@@ -8,7 +8,6 @@ from app.repositories import author_repository, book_repository
 from app.schemas.book import BookCreate
 from app.models.book import Book
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 AVAILABLE_COUNT_CACHE_KEY = "books:available_count:{isbn}"
@@ -126,43 +125,58 @@ def _deserialize_book(data: dict) -> Book:
 
 
 def create_book(db: Session, book_data: BookCreate) -> Book:
+    operation = "create_book"
     existing_author = author_repository.get_author_by_id(db, book_data.author_id)
     if not existing_author:
-        logger.warning(f"Attempt to create book with non-existent author ID: {book_data.author_id}")
+        logger.warning(
+            "Book creation blocked because author was not found",
+            extra={"operation": operation, "author_id": book_data.author_id, "reason": "author_not_found"},
+        )
 
         raise BookAuthorNotFoundError(book_data.author_id)
 
     try:
         new_book = book_repository.create_book(db, book_data)
         invalidate_available_exemplars_cache(new_book.isbn)
-        logger.info(f"Successfully created book. ID: {new_book.id}")
+        logger.info(
+            "Book created successfully",
+            extra={"operation": operation, "book_id": new_book.id, "author_id": new_book.author_id, "isbn": new_book.isbn},
+        )
 
         return new_book
 
-    except BookCreationError as e:
-        logger.error(f"Error while creating book '{book_data.title}': {str(e)}", exc_info=True)
+    except BookAuthorNotFoundError:
+        raise
+    except Exception as e:
+        logger.exception(
+            "Unexpected error while creating book",
+            extra={"operation": operation, "author_id": book_data.author_id, "isbn": book_data.isbn},
+        )
 
         raise BookCreationError(book_data.title, e)
 
 def list_books(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Book], int]:
-    logger.info(f"Listing books with skip={skip} and limit={limit}")
+    logger.debug("Listing books", extra={"operation": "list_books", "skip": skip, "limit": limit})
     
     return book_repository.get_books(db, skip, limit)
 
 def get_book(db: Session, book_id: int) -> Book:
-    logger.info(f"Fetching book with ID: {book_id}")
+    logger.debug("Fetching book by ID", extra={"operation": "get_book", "book_id": book_id})
 
     book = book_repository.get_book_by_id(db, book_id)
 
     if not book:
-        logger.warning(f"Book with ID {book_id} not found")
+        logger.warning(
+            "Book fetch blocked because book was not found",
+            extra={"operation": "get_book", "book_id": book_id, "reason": "book_not_found"},
+        )
 
         raise BookNotFoundError(book_id)
     
     return book
 
 def count_available_exemplars(db: Session, isbn: str) -> int:
-    logger.info(f"Counting available exemplars for ISBN: {isbn}")
+    logger.debug("Counting available exemplars", extra={"operation": "count_available_exemplars", "isbn": isbn})
 
     cache_key = _available_count_cache_key(isbn)
     cached_count = cache.get_json(cache_key)
@@ -174,7 +188,7 @@ def count_available_exemplars(db: Session, isbn: str) -> int:
     return available_count
 
 def get_exemplars_by_isbn(db: Session, isbn: str) -> list[Book]:
-    logger.info(f"Fetching exemplars for ISBN: {isbn}")
+    logger.debug("Fetching exemplars by ISBN", extra={"operation": "get_exemplars_by_isbn", "isbn": isbn})
 
     cache_key = _available_exemplars_cache_key(isbn)
     cached_exemplars = cache.get_json(cache_key)

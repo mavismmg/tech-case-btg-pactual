@@ -61,6 +61,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/library
       REDIS_URL: redis://redis:6379/0
+      LOG_PRETTY_JSON: "true"
     volumes:
       - .:/code:cached
     working_dir: /code

@@ -7,7 +7,6 @@ from app.models.account import Account, AccountRole
 from app.repositories import account_repository
 from app.schemas.account import AccountBootstrap, AccountCreate, AccountLogin
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -42,9 +41,13 @@ class InactiveAccountError(Exception):
 
 
 def create_account(db: Session, account_data: AccountCreate) -> Account:
+    operation = "create_account"
     existing_account = account_repository.get_account_by_email(db, account_data.email)
     if existing_account:
-        logger.warning("Attempt to create account with existing email: %s", account_data.email)
+        logger.warning(
+            "Account creation blocked because email already exists",
+            extra={"operation": operation, "account_id": existing_account.id, "reason": "email_already_exists"},
+        )
         raise AccountAlreadyExistsError(account_data.email)
 
     account = Account(
@@ -55,12 +58,22 @@ def create_account(db: Session, account_data: AccountCreate) -> Account:
         is_active=True,
     )
 
-    return account_repository.create_account(db, account)
+    try:
+        created_account = account_repository.create_account(db, account)
+        logger.info("Account created successfully", extra={"operation": operation, "account_id": created_account.id})
+        return created_account
+    except Exception:
+        logger.exception("Unexpected error while creating account", extra={"operation": operation})
+        raise
 
 
 def bootstrap_admin(db: Session, account_data: AccountBootstrap) -> Account:
+    operation = "bootstrap_admin"
     if account_repository.count_accounts(db) > 0:
-        logger.warning("Attempt to bootstrap admin after accounts already exist")
+        logger.warning(
+            "Admin bootstrap blocked because accounts already exist",
+            extra={"operation": operation, "reason": "accounts_already_exist"},
+        )
         raise BootstrapAlreadyUsedError()
 
     account = Account(
@@ -71,19 +84,33 @@ def bootstrap_admin(db: Session, account_data: AccountBootstrap) -> Account:
         is_active=True,
     )
 
-    return account_repository.create_account(db, account)
+    try:
+        created_account = account_repository.create_account(db, account)
+        logger.info("Admin bootstrapped successfully", extra={"operation": operation, "account_id": created_account.id})
+        return created_account
+    except Exception:
+        logger.exception("Unexpected error while bootstrapping admin", extra={"operation": operation})
+        raise
 
 
 def authenticate_account(db: Session, login_data: AccountLogin) -> Account:
+    operation = "authenticate_account"
     account = account_repository.get_account_by_email(db, login_data.email)
     if account is None or not verify_password(login_data.password, account.password_hash):
-        logger.warning("Invalid login attempt for email: %s", login_data.email)
+        logger.warning(
+            "Authentication blocked because credentials are invalid",
+            extra={"operation": operation, "reason": "invalid_credentials"},
+        )
         raise InvalidCredentialsError()
 
     if not account.is_active:
-        logger.warning("Inactive account login attempt: %s", login_data.email)
+        logger.warning(
+            "Authentication blocked because account is inactive",
+            extra={"operation": operation, "account_id": account.id, "reason": "account_inactive"},
+        )
         raise InactiveAccountError()
 
+    logger.info("Account authenticated successfully", extra={"operation": operation, "account_id": account.id})
     return account
 
 
@@ -98,17 +125,35 @@ def create_account_token(account: Account) -> tuple[str, int]:
 
 
 def list_accounts(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Account], int]:
+    logger.debug("Listing accounts", extra={"operation": "list_accounts", "skip": skip, "limit": limit})
     return account_repository.get_accounts(db, skip, limit)
 
 
 def get_account_by_id(db: Session, account_id: int) -> Account:
+    operation = "get_account_by_id"
     account = account_repository.get_account_by_id(db, account_id)
     if account is None:
+        logger.warning(
+            "Account fetch blocked because account was not found",
+            extra={"operation": operation, "account_id": account_id, "reason": "account_not_found"},
+        )
         raise AccountNotFoundError(account_id)
 
     return account
 
 
 def deactivate_account(db: Session, account_id: int) -> Account:
+    operation = "deactivate_account"
     account = get_account_by_id(db, account_id)
-    return account_repository.deactivate_account(db, account)
+    try:
+        deactivated_account = account_repository.deactivate_account(db, account)
+        logger.info("Account deactivated successfully", extra={"operation": operation, "account_id": account_id})
+        return deactivated_account
+    except AccountNotFoundError:
+        raise
+    except Exception:
+        logger.exception(
+            "Unexpected error while deactivating account",
+            extra={"operation": operation, "account_id": account_id},
+        )
+        raise

@@ -8,7 +8,6 @@ from app.models.loan import Loan, LoanStatus
 from app.repositories import loan_repository, book_repository, user_repository
 from app.services.book_service import invalidate_available_exemplars_cache
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class LoanNotFoundError(Exception):
@@ -47,6 +46,17 @@ class LoanReturnBookNotFoundError(Exception):
         super().__init__(self.message)
 
 
+BUSINESS_RULE_EXCEPTIONS = (
+    LoanNotFoundError,
+    LoanBookNotFoundError,
+    LoanBookIsNotAvailableError,
+    LoanLimitExceededError,
+    LoanUserNotFoundError,
+    LoanAlreadyReturnedError,
+    LoanReturnBookNotFoundError,
+)
+
+
 def _loan_user_lock_key(user_id: int) -> str:
     return f"loans:create:user:{user_id}"
 
@@ -71,7 +81,11 @@ def _transaction(db: Session) -> Iterator[None]:
 
 
 def create_loan(db: Session, user_id: int, book_id: int) -> Loan:
-    logger.info(f"Attempting to create loan for user (ID: {user_id}) and book (ID: {book_id})")
+    operation = "create_loan"
+    logger.debug(
+        "Starting loan creation flow",
+        extra={"operation": operation, "user_id": user_id, "book_id": book_id},
+    )
 
     book_isbn = None
 
@@ -83,13 +97,30 @@ def create_loan(db: Session, user_id: int, book_id: int) -> Loan:
             with _transaction(db):
                 user = user_repository.get_user_by_id(db, user_id)
                 if user is None:
-                    logger.warning(f"Attempt to create loan for non-existent user (ID: {user_id})")
+                    logger.warning(
+                        "Loan creation blocked because user was not found",
+                        extra={
+                            "operation": operation,
+                            "user_id": user_id,
+                            "book_id": book_id,
+                            "reason": "user_not_found",
+                        },
+                    )
                     raise LoanUserNotFoundError(user_id)
                 
                 active_loans = loan_repository.get_active_loans_count_by_user_id(db, user_id)
                 if active_loans >= 3:
-                    logger.warning(f"User (ID: {user_id}) has reached the maximum number of active loans")
-
+                    logger.warning(
+                        "Loan creation blocked because user reached the active loan limit",
+                        extra={
+                            "operation": operation,
+                            "user_id": user_id,
+                            "book_id": book_id,
+                            "active_loans": active_loans,
+                            "limit": 3,
+                            "reason": "active_loan_limit_reached",
+                        },
+                    )
                     raise LoanLimitExceededError(user_id)
                 
                 now = datetime.now(timezone.utc)
@@ -102,19 +133,33 @@ def create_loan(db: Session, user_id: int, book_id: int) -> Loan:
                     status=LoanStatus.ACTIVE
                 )
 
-            
-                logger.info(f"Creating loan for user (ID: {user_id}) and book (ID: {book_id})")
-
-            
+                logger.debug(
+                    "Creating loan record inside transaction",
+                    extra={"operation": operation, "user_id": user_id, "book_id": book_id},
+                )
                 book = book_repository.get_book_by_id(db, book_id)
                 if book is None:
-                    logger.warning(f"Book with ID {book_id} not found during loan creation for user (ID: {user_id})")
-                    
+                    logger.warning(
+                        "Loan creation blocked because book was not found",
+                        extra={
+                            "operation": operation,
+                            "user_id": user_id,
+                            "book_id": book_id,
+                            "reason": "book_not_found",
+                        },
+                    )
                     raise LoanBookNotFoundError(book_id)
                 
                 if not book.is_available:
-                    logger.warning(f"Book with ID {book_id} is not available during loan creation for user (ID: {user_id})")
-                    
+                    logger.warning(
+                        "Loan creation blocked because book is not available",
+                        extra={
+                            "operation": operation,
+                            "user_id": user_id,
+                            "book_id": book_id,
+                            "reason": "book_not_available",
+                        },
+                    )
                     raise LoanBookIsNotAvailableError(book_id)
                 
                 book_isbn = book.isbn
@@ -124,19 +169,29 @@ def create_loan(db: Session, user_id: int, book_id: int) -> Loan:
         if book_isbn is not None:
             invalidate_available_exemplars_cache(book_isbn)
         db.refresh(new_loan)
-    except Exception as e:
+    except BUSINESS_RULE_EXCEPTIONS:
+        db.rollback()
+        raise
+    except Exception:
         db.rollback()
 
-        logger.error(f"Error while creating loan: {str(e)}", exc_info=True)
+        logger.exception(
+            "Unexpected error while creating loan",
+            extra={"operation": operation, "user_id": user_id, "book_id": book_id},
+        )
 
         raise
     
-    logger.info(f"Loan created successfully with ID: {new_loan.id} for user (ID: {user_id}) and book (ID: {book_id})")
+    logger.info(
+        "Loan created successfully",
+        extra={"operation": operation, "user_id": user_id, "book_id": book_id, "loan_id": new_loan.id},
+    )
 
     return new_loan
 
 def return_loan(db: Session, loan_id: int) -> Loan:
-    logger.info(f"Attempting to return loan with ID: {loan_id}")
+    operation = "return_loan"
+    logger.debug("Starting loan return flow", extra={"operation": operation, "loan_id": loan_id})
 
     book_isbn = None
 
@@ -145,13 +200,17 @@ def return_loan(db: Session, loan_id: int) -> Loan:
             loan = loan_repository.get_loan_by_id(db, loan_id)
 
             if loan is None:
-                logger.warning(f"Attempt to return non-existent loan (ID: {loan_id})")
-
+                logger.warning(
+                    "Loan return blocked because loan was not found",
+                    extra={"operation": operation, "loan_id": loan_id, "reason": "loan_not_found"},
+                )
                 raise LoanNotFoundError(loan_id)
             
             if loan.status != LoanStatus.ACTIVE:
-                logger.warning(f"Attempt to return already returned loan (ID: {loan_id})")
-
+                logger.warning(
+                    "Loan return blocked because loan is not active",
+                    extra={"operation": operation, "loan_id": loan_id, "reason": "loan_not_active"},
+                )
                 raise LoanAlreadyReturnedError(loan_id)
             
             now = datetime.now(timezone.utc)
@@ -162,46 +221,80 @@ def return_loan(db: Session, loan_id: int) -> Loan:
             
             book = book_repository.get_book_by_id(db, loan.book_id)
             if book is None:
-                logger.warning(f"Book with ID {loan.book_id} not found during loan return for loan (ID: {loan_id})")
-                
+                logger.warning(
+                    "Loan return blocked because related book was not found",
+                    extra={
+                        "operation": operation,
+                        "loan_id": loan_id,
+                        "book_id": loan.book_id,
+                        "user_id": loan.user_id,
+                        "reason": "book_not_found",
+                    },
+                )
                 raise LoanReturnBookNotFoundError(loan.book_id)
             
             book.is_available = True
             book_isbn = book.isbn
-            
-            logger.info(f"Returning loan (ID: {loan_id}) with fine R$ {loan.fine_value}")
+            logger.debug(
+                "Applying loan return changes inside transaction",
+                extra={
+                    "operation": operation,
+                    "loan_id": loan_id,
+                    "book_id": loan.book_id,
+                    "user_id": loan.user_id,
+                    "fine_value": loan.fine_value,
+                },
+            )
 
         if book_isbn is not None:
             invalidate_available_exemplars_cache(book_isbn)
         db.refresh(loan)
-    except Exception as e:
+    except BUSINESS_RULE_EXCEPTIONS:
+        db.rollback()
+        raise
+    except Exception:
         db.rollback()
 
-        logger.error(f"Error while returning loan (ID: {loan_id}): {str(e)}", exc_info=True)
+        logger.exception(
+            "Unexpected error while returning loan",
+            extra={"operation": operation, "loan_id": loan_id},
+        )
 
         raise
     
-    logger.info(f"Loan (ID: {loan_id}) returned successfully")
+    logger.info(
+        "Loan returned successfully",
+        extra={
+            "operation": operation,
+            "loan_id": loan.id,
+            "user_id": loan.user_id,
+            "book_id": loan.book_id,
+            "fine_value": loan.fine_value,
+        },
+    )
 
     return loan
     
 def get_loans_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
-    logger.info(f"Fetching loans for user ID: {user_id}")
+    logger.debug("Fetching loans for user", extra={"operation": "get_loans_by_user", "user_id": user_id})
     loans, total = loan_repository.get_loans_by_user_id(db, user_id, skip, limit)
     return loans, total
     
 def list_loans(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Loan], int]:
-    logger.info(f"Listing loans with skip={skip} and limit={limit}")
+    logger.debug("Listing loans", extra={"operation": "list_loans", "skip": skip, "limit": limit})
 
     return loan_repository.get_loans(db, skip, limit)
 
 def get_loan_by_id(db: Session, loan_id: int) -> Loan | None:
-    logger.info(f"Fetching loan by ID: {loan_id}")
+    logger.debug("Fetching loan by ID", extra={"operation": "get_loan_by_id", "loan_id": loan_id})
 
     loan = loan_repository.get_loan_by_id(db, loan_id)
 
     if not loan:
-        logger.warning(f"Loan with ID {loan_id} not found")
+        logger.warning(
+            "Loan fetch blocked because loan was not found",
+            extra={"operation": "get_loan_by_id", "loan_id": loan_id, "reason": "loan_not_found"},
+        )
 
         raise LoanNotFoundError(loan_id)
     

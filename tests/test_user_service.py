@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from datetime import date
 
@@ -36,20 +38,27 @@ def test_get_user_by_id_not_found(db):
     with pytest.raises(UserNotFoundError):
         get_user_by_id(db, 999)
 
-def test_create_user_restores_soft_deleted_user_with_same_email(db):
+def test_create_user_restores_soft_deleted_user_with_same_email(db, caplog):
     user_data = UserCreate(name="Test User", email="test@example.com")
     deleted_user = create_user(db, user_data)
     deleted_user_id = deleted_user.id
 
     delete_user(db, deleted_user.id)
 
-    restored_user = create_user(db, UserCreate(name="Second User", email="test@example.com"))
+    with caplog.at_level(logging.INFO, logger="app.services.user_service"):
+        restored_user = create_user(db, UserCreate(name="Second User", email="test@example.com"))
 
     assert restored_user.id == deleted_user_id
     assert restored_user.name == "Second User"
     assert restored_user.email == "test@example.com"
     assert restored_user.deleted_at is None
     assert restored_user.is_active is True
+
+    log_record = next(
+        record for record in caplog.records if record.message == "User restored successfully"
+    )
+    assert log_record.operation == "restore_user"
+    assert log_record.user_id == deleted_user_id
 
 def test_delete_user_with_active_loan_fails(db):
     user = create_user(db, UserCreate(name="Test User", email="test@example.com"))
