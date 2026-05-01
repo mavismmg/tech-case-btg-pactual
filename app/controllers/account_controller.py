@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, require_roles
+from app.core.rate_limit import rate_limit
 from app.models.account import AccountRole
 from app.schemas.account import AccountCreate, AccountResponse
 from app.schemas.common import PaginatedResponse
@@ -23,7 +24,7 @@ admin_only = Depends(require_roles(AccountRole.ADMIN))
     "/",
     response_model=AccountResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[admin_only],
+    dependencies=[admin_only, Depends(rate_limit(limit=10))],
 )
 def create_account(account: AccountCreate, db: Session = Depends(get_db)) -> AccountResponse:
     try:
@@ -60,7 +61,7 @@ def list_accounts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 @router.delete(
     "/{account_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[admin_only],
+    dependencies=[admin_only, Depends(rate_limit(limit=10))],
 )
 def deactivate_account(account_id: int, db: Session = Depends(get_db)) -> None:
     try:
