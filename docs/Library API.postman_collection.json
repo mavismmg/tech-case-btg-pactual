@@ -1,0 +1,1262 @@
+{
+  "info": {
+    "_postman_id": "d65eec8d-28d4-4c7d-9167-2550c37d04ee",
+    "name": "Library API",
+    "description": "### Welcome to Postman! This is your first collection. \n\nCollections are your starting point for building and testing APIs. You can use this one to:\n\n• Group related requests\n• Test your API in real-world scenarios\n• Document and share your requests\n\nUpdate the name and overview whenever you’re ready to make it yours.\n\n[Learn more about Postman Collections.](https://learning.postman.com/docs/collections/collections-overview/)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "54413970",
+    "_collection_link": "https://go.postman.co/collection/54413970-d65eec8d-28d4-4c7d-9167-2550c37d04ee?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Get Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "2"
+              ]
+            },
+            "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
+          },
+          "response": []
+        },
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Successful POST request\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjAxMTM2LCJpYXQiOjE3Nzc1OTc1MzYsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.5V2sv5xFyPllq6ilJJIHthcLWqyCc1h2blX5xxn5iBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"devtest\",\n    \"email\": \"devtest2@test.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjAxMTM2LCJpYXQiOjE3Nzc1OTc1MzYsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.5V2sv5xFyPllq6ilJJIHthcLWqyCc1h2blX5xxn5iBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"devtest\",\n    \"email\": \"devtest@test.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjU0NjYwLCJpYXQiOjE3Nzc2NTEwNjAsImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20iLCJyb2xlIjoiYWRtaW4ifQ.-byyADdCbDySTe1alRszBAVq_vcD3oGgL657D3pRVUA",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/-2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "-2"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Loans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/1/loans?skip=0&limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "1",
+                "loans"
+              ],
+              "query": [
+                {
+                  "key": "skip",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Contains endpoints for managing library users. Supports full CRUD operations — creating, retrieving, updating, and deleting users — as well as fetching the list of loans associated with a specific user."
+    },
+    {
+      "name": "Book",
+      "item": [
+        {
+          "name": "Get Books",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"devtest\",\n    \"email\": \"devtest@test.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Book By ID",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"devtest\",\n    \"email\": \"devtest@test.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/books/3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "3"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Book",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Successful POST request\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwiZXhwIjoxNzc3NjAxODgyLCJpYXQiOjE3Nzc1OTgyODIsImVtYWlsIjoicmVhZGVyQG1haWwuY29tIiwicm9sZSI6InJlYWRlciJ9.SBsJwl1otM6oWk4SfZY_voUlob9nKJhybo7-s3_5JLM",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"A hora da estrela\",\n    \"isbn\": \"9788520943489\",\n    \"author_id\": 1,\n    \"published_date\": \"1899-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            },
+            "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+          },
+          "response": []
+        },
+        {
+          "name": "Count ISBN",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/count/9788520943489",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "count",
+                "9788520943489"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Book By ISBN",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/exemplars/9788520943489",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "exemplars",
+                "9788520943489"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Book",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "\"message\": \"There are no available exemplars for ISBN 97885209434891.\"",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "5"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Contains endpoints for managing the library's book catalog. Allows listing all books, retrieving a specific book by ID or ISBN, registering new books, and counting the number of copies available for a given ISBN."
+    },
+    {
+      "name": "Loan",
+      "item": [
+        {
+          "name": "Get Loans",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"devtest\",\n    \"email\": \"devtest@test.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loans"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Loans By ID",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"devtest\",\n    \"email\": \"devtest@test.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loans/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loans",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Loan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzc3NjAyMTAwLCJpYXQiOjE3Nzc1OTg1MDAsImVtYWlsIjoibGlicmFyaWFuLXRlc3QyQG1haWwuY29tIiwicm9sZSI6ImxpYnJhcmlhbiJ9.raOOD-gPsC-YgDjJUAu5TyoVTOcHVx2BG69VoKqIv1g",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/loans/?user_id=1&book_id=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loans",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "1"
+                },
+                {
+                  "key": "book_id",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Return Loan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjAxMTM2LCJpYXQiOjE3Nzc1OTc1MzYsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.5V2sv5xFyPllq6ilJJIHthcLWqyCc1h2blX5xxn5iBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/loans/3/return",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loans",
+                "3",
+                "return"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Overdue Loans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/loans/overdue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loans",
+                "overdue"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Active Loans",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        }
+      ],
+      "description": "Contains endpoints for managing book loans. Supports listing all loans, retrieving a specific loan by ID, creating a new loan by associating a user with a book, and processing the return of a borrowed book."
+    },
+    {
+      "name": "Author",
+      "item": [
+        {
+          "name": "Create Author",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwiZXhwIjoxNzc3NjAxODgyLCJpYXQiOjE3Nzc1OTgyODIsImVtYWlsIjoicmVhZGVyQG1haWwuY29tIiwicm9sZSI6InJlYWRlciJ9.SBsJwl1otM6oWk4SfZY_voUlob9nKJhybo7-s3_5JLM",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Clarice Linspector\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authors"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Authors",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authors"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Authors By ID",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authors/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authors",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Contains endpoints for managing book authors. Allows registering new authors and retrieving the full list of authors or a specific author by their ID."
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Bootstrap Admin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"admin\",\n    \"email\": \"admin@admin.com\",\n    \"password\": \"12345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/bootstrap",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "bootstrap"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Auth Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"admin@admin.com\",\n    \"password\": \"12345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Auth Login Librarian",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"librarian-test2@mail.com\",\n    \"password\": \"12345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Auth Login Reader",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"reader@mail.com\",\n    \"password\": \"12345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Auth Me",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjAxMTM2LCJpYXQiOjE3Nzc1OTc1MzYsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.5V2sv5xFyPllq6ilJJIHthcLWqyCc1h2blX5xxn5iBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Contains endpoints for authentication and authorization. Includes bootstrapping the initial admin account, logging in to obtain an access token, and retrieving the profile of the currently authenticated user."
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Create Account Librarian",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjAxMTM2LCJpYXQiOjE3Nzc1OTc1MzYsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.5V2sv5xFyPllq6ilJJIHthcLWqyCc1h2blX5xxn5iBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"name\": \"librarian-test\",\r\n    \"email\": \"librarian-test2@mail.com\",\r\n    \"password\": \"12345678\",\r\n    \"role\": \"librarian\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Account Admin",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjU0MzQxLCJpYXQiOjE3Nzc2NTA3NDEsImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20iLCJyb2xlIjoiYWRtaW4ifQ.IwiQ-vxjnPJlCfOH0RQEyo1njWv9kStmTUn7TdiFWKE",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"name\": \"admin-test\",\r\n    \"email\": \"admin-test@mail.com\",\r\n    \"password\": \"12345678\",\r\n    \"role\": \"admin\",\r\n    \"user_id\": 2\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Account Reader",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjAxMTM2LCJpYXQiOjE3Nzc1OTc1MzYsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.5V2sv5xFyPllq6ilJJIHthcLWqyCc1h2blX5xxn5iBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"name\": \"reader-test2\",\r\n    \"email\": \"reader2@mail.com\",\r\n    \"password\": \"12345678\",\r\n    \"role\": \"reader\",\r\n    \"user_id\": 2\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Accounts",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NTk0MTI1LCJpYXQiOjE3Nzc1OTA1MjUsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.qY6cNQLNM8va2FF94Zr3VT0NClqxzrcEHTmIJqTGlKI",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"name\": \"librarian-test\",\r\n    \"email\": \"librarian-test@mail.com\",\r\n    \"password\": \"12345678\",\r\n    \"role\": \"librarian\"\r\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Account",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"name\": \"librarian-test\",\r\n    \"email\": \"librarian-test@mail.com\",\r\n    \"password\": \"12345678\",\r\n    \"role\": \"librarian\"\r\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Contains endpoints for managing library accounts. Supports creating new accounts, listing all existing accounts, and deleting a specific account by ID."
+    },
+    {
+      "name": "Loan Requests",
+      "item": [
+        {
+          "name": "Create Loan Request",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwiZXhwIjoxNzc3NjE0NzU5LCJpYXQiOjE3Nzc2MTExNTksImVtYWlsIjoicmVhZGVyQG1haWwuY29tIiwicm9sZSI6InJlYWRlciJ9.hpveFMQhbYhGuYZX2NeyndQUC5N9by7QT6bPRU_dlp4",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"book_id\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loan-requests/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loan-requests",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Loan Requests",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzc3NjAyMTAwLCJpYXQiOjE3Nzc1OTg1MDAsImVtYWlsIjoibGlicmFyaWFuLXRlc3QyQG1haWwuY29tIiwicm9sZSI6ImxpYnJhcmlhbiJ9.raOOD-gPsC-YgDjJUAu5TyoVTOcHVx2BG69VoKqIv1g",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/loan-requests/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loan-requests",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Return Request",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0IiwiZXhwIjoxNzc3NjAyNzA4LCJpYXQiOjE3Nzc1OTkxMDgsImVtYWlsIjoicmVhZGVyMkBtYWlsLmNvbSIsInJvbGUiOiJyZWFkZXIifQ.h0oP5rn974fbDqy9aljMKvkoTdovQLmLSD41FtG22_A",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"loan_id\": 5\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/return-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "return-requests"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Renewal Request",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwiZXhwIjoxNzc3NjA2NDc2LCJpYXQiOjE3Nzc2MDI4NzYsImVtYWlsIjoicmVhZGVyQG1haWwuY29tIiwicm9sZSI6InJlYWRlciJ9.CoIr8R1kOWxjha3-xQpU9V4e9FpqcEhxEfvU4dnUjZM",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"loan_id\": 5\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/renewal-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "renewal-requests"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Loan Request",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzc3NjA2NTUwLCJpYXQiOjE3Nzc2MDI5NTAsImVtYWlsIjoibGlicmFyaWFuLXRlc3QyQG1haWwuY29tIiwicm9sZSI6ImxpYnJhcmlhbiJ9.pKsU62Zc2RGbyW2vE2dfoI2JgaeitfUunxitB5tlJks",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/loan-requests/6/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loan-requests",
+                "6",
+                "approve"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Loan Request",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NTk5OTE4LCJpYXQiOjE3Nzc1OTYzMTgsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.3wldAnucnahOV22ZVp_aEy85pvBO1jOVc2T3jt_tzb0",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"reason\": \"Book is not available!\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/loan-requests/3/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "loan-requests",
+                "3",
+                "reject"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health check + Metrics",
+      "item": [
+        {
+          "name": "Get Metrics",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc3NjE0OTUwLCJpYXQiOjE3Nzc2MTEzNTAsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwicm9sZSI6ImFkbWluIn0.rMbwxp9Hp9a_51Eh5TOVE4hA1UO74K8KTmO8uKF5NCM",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metrics/loans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metrics",
+                "loans"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Send Due Loan Notifications",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/due-loans/send?days_ahead=5&channel=all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "due-loans",
+                "send"
+              ],
+              "query": [
+                {
+                  "key": "days_ahead",
+                  "value": "5"
+                },
+                {
+                  "key": "channel",
+                  "value": "all"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

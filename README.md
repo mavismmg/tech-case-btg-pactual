@@ -1,101 +1,204 @@
 # Sistema de Gerenciamento de Biblioteca Digital
 
-API REST para gerenciamento de uma biblioteca digital. A aplicação cobre o cadastro de usuários, contas de acesso, autores e livros, além do fluxo de empréstimos com solicitação, aprovação, devolução, multa por atraso e renovação.
+## Overview
 
-O projeto foi mantido simples de rodar localmente com Docker Compose, mas sem abrir mão de alguns cuidados esperados em uma API backend: autenticação JWT, autorização por perfis, cache com Redis, rate limiting, validações com Pydantic, separação em camadas e testes automatizados.
+- API REST para biblioteca digital com **usuários, contas, catálogo, solicitações, empréstimos, devoluções, multas e renovações**.
+- Foco em backend: **consistência transacional, controle de concorrência, autorização por perfis e regras de negócio centralizadas**.
+- Arquitetura em camadas: **controller -> service -> repository**, com domínio separado de infraestrutura.
+- Redis usado de forma pragmática para **cache, locks distribuídos e rate limiting**.
+- Inclui testes automatizados, logs estruturados, métricas operacionais, notificações de vencimento e frontend demonstrativo.
+
+## TL;DR
+
+- **Stack:** Python 3.12, FastAPI, PostgreSQL, SQLAlchemy, Pydantic, Redis, Alembic, Pytest, Docker Compose, React/Vite.
+- **Features principais:** autenticação JWT, RBAC (`admin`, `librarian`, `reader`), catálogo, empréstimos, solicitações, multas, renovações e notificações.
+- **Diferenciais técnicos:** Redis locks, `SELECT FOR UPDATE`, transações, cache com invalidação, rate limiting por identidade, métricas e logs estruturados.
+- **Setup local:** `make start` sobe API, PostgreSQL e Redis; Swagger em `http://localhost:8000/docs`.
+- **Frontend:** console simples para demonstrar a API em funcionamento, sem pretensão de ser produto final.
+
+## Destaques Técnicos
+
+- **Controle de concorrência:** criação de empréstimos usa locks Redis por usuário/livro e bloqueio pessimista no banco com `SELECT FOR UPDATE`.
+- **Consistência transacional:** criação, devolução e renovação alteram `Loan`, `Book` e `LoanRequest` de forma coordenada.
+- **Arquitetura em camadas:** controllers finos, services com regra de negócio e repositories isolando queries.
+- **Separação de domínio:** `User` representa o leitor da biblioteca; `Account` representa credencial, perfil e autenticação.
+- **Fluxo de aprovação:** `LoanRequest` modela solicitações pendentes, aprovadas e rejeitadas; `Loan` só representa empréstimo efetivo.
+- **Proteção contra abuso:** rate limiting com Redis por conta autenticada ou IP anônimo.
+- **Cache com invalidação:** consultas frequentes de livros/autores usam TTL curto e invalidação em mudanças relevantes.
+- **Observabilidade:** logs estruturados em JSON, health check, métricas operacionais e exportação CSV.
+
+## Conexão com Cenários Reais
+
+Embora o domínio seja uma biblioteca, o projeto modela problemas comuns em sistemas financeiros e operacionais:
+
+- **Consistência:** evitar estados parciais, como livro indisponível sem empréstimo correspondente.
+- **Concorrência:** impedir que duas requisições simultâneas emprestem o mesmo exemplar ou ultrapassem limites de usuário.
+- **Rastreabilidade:** registrar eventos do fluxo de empréstimos para auditoria operacional.
+- **Autorização:** separar ações de staff e leitor, validando permissões no backend.
+- **Proteção contra abuso:** aplicar rate limit em rotas sensíveis como login, bootstrap e criação de recursos.
+- **Degradação controlada:** se Redis falhar, cache/rate limit/locks degradam com log, sem derrubar imediatamente a API local do case.
 
 ## Índice
 
-- [Contexto do Desafio](#contexto-do-desafio)
-- [Funcionalidades Implementadas](#funcionalidades-implementadas)
-- [Tecnologias Utilizadas](#tecnologias-utilizadas)
-- [Arquitetura](#arquitetura)
-- [Aplicação de SOLID](#aplicação-de-solid)
-- [Modelo de Domínio](#modelo-de-domínio)
-- [Regras de Negócio Implementadas](#regras-de-negócio-implementadas)
-- [Estados do Fluxo de Empréstimo](#estados-do-fluxo-de-empréstimo)
-- [Fluxo de Empréstimo](#fluxo-de-empréstimo)
-- [Atomicidade no Fluxo de Empréstimos](#atomicidade-no-fluxo-de-empréstimos)
-- [Autenticação e Autorização](#autenticação-e-autorização)
-- [Cache com Redis](#cache-com-redis)
-- [Rate Limiting](#rate-limiting)
-- [Tratamento de Erros](#tratamento-de-erros)
-- [Logging](#logging)
-- [Health Check](#health-check)
-- [Métricas Operacionais](#métricas-operacionais)
-- [Notificações de Vencimento](#notificações-de-vencimento)
-- [Banco de Dados e Inicialização](#banco-de-dados-e-inicialização)
 - [Como Rodar Localmente](#como-rodar-localmente)
 - [Como Rodar os Testes](#como-rodar-os-testes)
-- [Testes Manuais de QA](#testes-manuais-de-qa)
-- [Padrão de Código](#padrão-de-código)
+- [Arquitetura](#arquitetura)
+- [Modelo de Domínio](#modelo-de-domínio)
+- [Regras e Fluxos de Empréstimo](#regras-e-fluxos-de-empréstimo)
+- [Segurança, Autorização e Rate Limiting](#segurança-autorização-e-rate-limiting)
+- [Consistência, Cache e Concorrência](#consistência-cache-e-concorrência)
+- [Observabilidade](#observabilidade)
+- [Notificações de Vencimento](#notificações-de-vencimento)
+- [Banco de Dados e Migrations](#banco-de-dados-e-migrations)
+- [Frontend Demonstrativo](#frontend-demonstrativo)
 - [Endpoints Principais](#endpoints-principais)
 - [Exemplos de Uso](#exemplos-de-uso)
-- [Collection Postman](#collection-postman)
+- [Postman](#postman)
+- [Padrão de Código](#padrão-de-código)
 - [Decisões Arquiteturais e Trade-offs](#decisões-arquiteturais-e-trade-offs)
 - [Melhorias Futuras](#melhorias-futuras)
 
-## Contexto do Desafio
+## Como Rodar Localmente
 
-Este projeto foi desenvolvido para o tech case de uma API REST de biblioteca digital. O desafio avalia arquitetura em camadas, boas práticas em Python, validações, tratamento de erros, organização de código, testes e iniciativa técnica.
+### Pré-requisitos
 
-No desenho atual, o domínio foi dividido em:
+- Docker
+- Docker Compose
+- Python 3.12 ou superior, caso rode fora do container
+- Node.js compatível com a versão instalada do Vite, caso rode o frontend
 
-- usuários da biblioteca;
-- contas de acesso e permissões;
-- autores;
-- livros vinculados a autores;
-- solicitações de empréstimo, devolução e renovação;
-- empréstimos ativos, atrasados e devolvidos.
+### Variáveis de Ambiente
 
-## Funcionalidades Implementadas
+Crie um `.env` a partir de `.env-example`.
 
-- Cadastro, listagem, busca, atualização e remoção lógica de usuários.
-- Cadastro e listagem de autores.
-- Cadastro, listagem e busca de livros vinculados a autores.
-- Verificação de exemplares disponíveis por ISBN.
-- Autenticação com JWT Bearer.
-- Bootstrap do primeiro administrador.
-- Criação e desativação de contas por administrador.
-- Autorização por roles: `admin`, `librarian` e `reader`.
-- Empréstimo direto por `admin` ou `librarian`.
-- Solicitação de empréstimo por conta `reader/user`.
-- Aprovação e rejeição de solicitações por `admin` ou `librarian`.
-- Solicitação de devolução e renovação por `reader/user`.
-- Processamento de devolução com cálculo automático de multa.
-- Renovação de empréstimo ativo uma vez, quando não está atrasado.
-- Listagem de empréstimos ativos e atrasados.
-- Limite de 3 empréstimos ativos por usuário.
-- Paginação em listagens principais com `skip` e `limit`.
-- Cache Redis para consultas frequentes.
-- Rate limiting por rota e identidade do cliente.
-- Notificações de vencimento por endpoint manual, email fake e webhook HTTP configurável.
-- Frontend React básico e responsivo conectado à API.
-- Logging estruturado em JSON.
-- Health check com verificação básica de banco e Redis.
-- Métricas operacionais de empréstimos registradas no PostgreSQL.
-- Testes unitários e funcionais com Pytest.
-- Collection Postman para avaliação manual da API.
-- Documentação automática via Swagger/OpenAPI do FastAPI.
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/library
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/library_test
+REDIS_URL=redis://localhost:6379
+JWT_SECRET_KEY=change-me
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+RATE_LIMIT_ENABLED=true
+LOG_PRETTY_JSON=true
+CORS_ORIGINS=http://localhost:5173
+DUE_LOAN_NOTIFICATIONS_ENABLED=false
+DUE_LOAN_NOTIFICATION_INTERVAL_SECONDS=3600
+DUE_LOAN_NOTIFICATION_DAYS_AHEAD=1
+DUE_LOAN_WEBHOOK_URL=
+```
 
-## Tecnologias Utilizadas
+### Subir API, Banco e Redis
 
-| Tecnologia | Uso no projeto | Motivo da escolha |
+```bash
+make start
+```
+
+O container da API aplica as migrations antes de iniciar.
+
+```text
+API:     http://localhost:8000
+Swagger: http://localhost:8000/docs
+```
+
+### Subir Apenas Banco e Redis
+
+```bash
+make db
+```
+
+### Rodar API Localmente com Virtualenv
+
+```bash
+make local
+```
+
+Se as dependências já estiverem instaladas:
+
+```bash
+make local-soft
+```
+
+Aplicar migrations:
+
+```bash
+make migrate
+```
+
+Criar nova migration:
+
+```bash
+make revision m="descricao_da_migration"
+```
+
+### Dados de Exemplo
+
+```bash
+make seed
+```
+
+O seed é idempotente e cria:
+
+- conta `admin`;
+- conta `librarian`;
+- usuário da biblioteca;
+- conta `reader` vinculada ao usuário;
+- autores e livros disponíveis.
+
+Credenciais locais:
+
+| Perfil | Email | Senha |
 | --- | --- | --- |
-| Python | Linguagem principal | Ecossistema maduro para APIs e testes. |
-| FastAPI | Framework HTTP | Facilita a criação de endpoints, validações e documentação OpenAPI. |
-| PostgreSQL | Banco relacional | Boa escolha para regras que dependem de consistência, como empréstimos. |
-| SQLAlchemy | ORM | Mantém as queries isoladas nos repositories e ajuda no controle transacional. |
-| Pydantic | Schemas e validações | Define contratos claros de entrada e saída. |
-| Redis | Cache, rate limit e locks | Usado para acelerar consultas e reduzir riscos em operações concorrentes. |
-| Docker Compose | Ambiente local | Sobe API, banco e Redis com poucos comandos. |
-| React + Vite | Frontend | Interface leve para demonstrar os fluxos principais do case. |
-| Pytest | Testes | Cobre regras de negócio, autenticação, cache, rate limit e fluxos HTTP. |
-| JWT | Autenticação | Protege os endpoints sem manter sessão no servidor. |
+| `admin` | `admin@example.com` | `strong-password` |
+| `librarian` | `librarian@example.com` | `strong-password` |
+| `reader` | `reader-account@example.com` | `strong-password` |
+
+### Parar Containers
+
+```bash
+make stop
+```
+
+## Como Rodar os Testes
+
+Suba o banco de teste e Redis:
+
+```bash
+make test_db
+```
+
+Execute a suíte:
+
+```bash
+pytest
+```
+
+Ou via Makefile:
+
+```bash
+make test
+```
+
+Cobertura:
+
+```bash
+make coverage
+```
+
+Lint e testes:
+
+```bash
+make check
+```
+
+### QA Manual
+
+Também foi executado um roteiro manual cobrindo autenticação, autorização, usuários, catálogo, empréstimos, solicitações, métricas, health check, cache, rate limit e concorrência.
+
+Relatório: [docs/manual-qa-report.md](docs/manual-qa-report.md).
 
 ## Arquitetura
 
-O projeto segue uma arquitetura em camadas. A ideia principal é deixar o controller fino, concentrar regra de negócio nos services e isolar acesso a dados nos repositories.
+O projeto usa arquitetura em camadas para separar entrada HTTP, regras de negócio e persistência.
 
 ```text
 Request -> Controller -> Service -> Repository -> Database
@@ -103,28 +206,26 @@ Request -> Controller -> Service -> Repository -> Database
                     \-> Core infrastructure
 ```
 
-Responsabilidades principais:
-
 | Camada | Responsabilidade |
 | --- | --- |
-| `controllers` | Entrada HTTP, dependências FastAPI, autorização e tradução de exceções para status HTTP. |
-| `services` | Regras de negócio, validações de domínio, transações e orquestração de operações. |
-| `repositories` | Acesso ao banco via SQLAlchemy. |
+| `controllers` | Rotas FastAPI, dependências, autorização e tradução de exceções para HTTP. |
+| `services` | Regras de negócio, transações, validações e orquestração. |
+| `repositories` | Acesso a dados via SQLAlchemy. |
 | `models` | Entidades ORM e relacionamentos. |
 | `schemas` | Contratos Pydantic de entrada e saída. |
-| `core` | Infraestrutura: banco, segurança, cache, rate limit e logging. |
+| `core` | Banco, segurança, cache, rate limit e logging. |
 
 ### Visão da API
 
 ```mermaid
 flowchart TD
-    Client[Cliente / Postman / Swagger] --> API[FastAPI App]
+    Client[Cliente / Postman / Swagger / Frontend] --> API[FastAPI App]
 
-    API --> Auth[Autenticação JWT]
+    API --> Auth[JWT Auth]
     API --> RateLimit[Rate limiting]
     RateLimit --> Redis[(Redis)]
 
-    API --> Controllers[Controllers / Routers]
+    API --> Controllers[Controllers]
     Controllers --> Schemas[Schemas Pydantic]
     Controllers --> Services[Services]
 
@@ -133,7 +234,7 @@ flowchart TD
     Cache --> Redis
 
     Repositories --> DB[(PostgreSQL)]
-    Services --> Logs[Logs estruturados JSON]
+    Services --> Logs[Logs JSON]
 ```
 
 ### Fluxo em Camadas
@@ -153,34 +254,31 @@ flowchart LR
 ```text
 app/
   controllers/     # Rotas HTTP por domínio
-  core/            # Configuração de banco, JWT, Redis, rate limit e logging
+  core/            # Banco, JWT, Redis, rate limit e logging
   models/          # Modelos SQLAlchemy
   repositories/    # Queries e persistência
   schemas/         # Schemas Pydantic
   services/        # Regras de negócio
-  dependencies.py  # Dependências compartilhadas do FastAPI
-  server.py        # Criação da aplicação e inclusão de routers
-frontend/          # Aplicação React/Vite conectada à API
-tests/             # Testes unitários e funcionais
-docker-compose.yml # PostgreSQL, Redis, banco de teste e API
-Dockerfile         # Imagem da API
+  dependencies.py  # Dependências FastAPI compartilhadas
+  server.py        # Criação da app e routers
+frontend/          # React/Vite demonstrativo
+tests/             # Testes unitários, funcionais e integração
+alembic/           # Migrations
+docker-compose.yml # API, PostgreSQL, Redis e banco de teste
 Makefile           # Comandos auxiliares
-requirements.txt   # Dependências Python
 ```
 
-## Aplicação de SOLID
+### SOLID de Forma Pragmática
 
-O projeto aplica SOLID de forma pragmática, principalmente pela separação em camadas. A proposta não foi criar uma arquitetura enterprise com interfaces para tudo, mas manter responsabilidades claras e facilitar evolução/testes.
-
-| Princípio | Como aparece no projeto |
+| Princípio | Aplicação no projeto |
 | --- | --- |
-| Single Responsibility | Controllers tratam HTTP, services concentram regras de negócio, repositories acessam o banco, schemas definem contratos e `core` concentra infraestrutura. |
-| Open/Closed | Parcialmente atendido. As regras estão centralizadas nos services, mas novos tipos de fluxo em `LoanRequest` ainda exigiriam alterar o service principal. |
-| Liskov Substitution | Pouco aplicável, pois o projeto não usa hierarquias de classes relevantes. Não há sinais de violação. |
-| Interface Segregation | Aplicado de forma simples pela separação dos módulos por domínio e camada, sem contratos artificiais. |
-| Dependency Inversion | Parcialmente atendido. Services usam repositories concretos; para o tamanho do case isso reduz complexidade, mas em produção poderia evoluir para injeção de dependências/ports. |
+| Single Responsibility | Controllers, services, repositories, schemas e core têm responsabilidades separadas. |
+| Open/Closed | Regras centralizadas facilitam evolução, embora novos tipos de solicitação ainda alterem o service principal. |
+| Liskov | Pouco aplicável, sem hierarquias relevantes. |
+| Interface Segregation | Separação por módulos e camadas sem interfaces artificiais. |
+| Dependency Inversion | Parcial. Services usam repositories concretos por simplicidade do case; em produção poderia evoluir para ports/adapters. |
 
-O principal trade-off foi manter uma arquitetura compreensível e objetiva para o escopo do desafio, evitando abstrações prematuras.
+Trade-off: manter clareza e baixa cerimônia para um tech case, sem criar arquitetura enterprise desnecessária.
 
 ## Modelo de Domínio
 
@@ -219,7 +317,6 @@ erDiagram
         int user_id FK
         boolean is_active
         datetime created_at
-        datetime updated_at
         datetime deleted_at
     }
 
@@ -227,19 +324,17 @@ erDiagram
         int id PK
         string name
         datetime created_at
-        datetime updated_at
         datetime deleted_at
     }
 
     BOOKS {
         int id PK
         string isbn
-        int author_id FK
         string title
+        int author_id FK
         date published_date
         boolean is_available
         datetime created_at
-        datetime updated_at
         datetime deleted_at
     }
 
@@ -268,134 +363,60 @@ erDiagram
         datetime created_at
         datetime reviewed_at
     }
-
-    LOAN_OPERATION_METRICS {
-        int id PK
-        string operation
-        int loan_id FK
-        int loan_request_id FK
-        int user_id FK
-        int book_id FK
-        int account_id FK
-        int reviewer_account_id FK
-        float fine_value
-        datetime created_at
-    }
 ```
 
-| Entidade | Descrição |
-| --- | --- |
-| `User` | Pessoa usuária da biblioteca. Possui dados cadastrais e relacionamento com empréstimos. |
-| `Account` | Conta autenticável, com email, senha criptografada, role e vínculo opcional com `User`. |
-| `Author` | Autor de livros. |
-| `Book` | Exemplar de livro, vinculado a um autor e identificado por ISBN. |
-| `Loan` | Empréstimo ativo ou devolvido, com prazo, data de devolução, multa e contador de renovação. |
-| `LoanRequest` | Solicitação de empréstimo, devolução ou renovação, revisada por staff. |
-| `LoanOperationMetric` | Registro operacional de eventos relevantes do ciclo de empréstimos. |
+### Separações Importantes
 
-### Nota sobre `Book`, ISBN e atualização de catálogo
+- **`User` vs `Account`:** `User` é o leitor da biblioteca; `Account` é credencial, autenticação e autorização.
+- **`reader` vs `user`:** o enunciado usa "user", mas a role pública é `reader` para não conflitar com a entidade `User`.
+- **`LoanRequest` vs `Loan`:** solicitação é intenção pendente; empréstimo é operação efetivada.
+- **`Book` e ISBN:** múltiplos exemplares podem compartilhar ISBN; disponibilidade é por exemplar, não por título.
 
-No projeto, `Book` representa um exemplar físico/digital do acervo. O `isbn` é o identificador bibliográfico do livro, usado no mercado editorial para identificar uma edição específica de uma obra. Em termos práticos, ele ajuda a agrupar exemplares do mesmo livro e permite consultar disponibilidade por ISBN.
+### Catálogo e Histórico
 
-Por esse motivo, a API não expõe um endpoint público para alterar `isbn`, `title`, `author_id` ou `published_date` depois que o livro foi cadastrado. Se esses dados fossem editados livremente, o histórico poderia ficar ambíguo: por exemplo, um empréstimo antigo poderia passar a apontar para um livro com outro ISBN ou outro título.
+A API não expõe endpoint público para alterar `isbn`, `title`, `author_id` ou `published_date` depois do cadastro. A decisão evita ambiguidade histórica: um empréstimo antigo não deveria passar a apontar para um livro com outro ISBN ou título. Para correção operacional, o fluxo previsto é remover logicamente e cadastrar novo registro.
 
-Para preservar rastreabilidade, o catálogo segue uma abordagem mais conservadora:
+## Regras e Fluxos de Empréstimo
 
-- dados bibliográficos são definidos na criação do livro;
-- múltiplos exemplares com mesmo `title`, `author_id` e `isbn` são permitidos;
-- um mesmo `title` para o mesmo autor com ISBN diferente é bloqueado para evitar cadastro incoerente;
-- remoção usa soft delete, mantendo o registro histórico no banco;
-- `is_available` é alterado pelo próprio fluxo de empréstimo/devolução, não por update manual do catálogo.
+### Regras de Negócio
 
-### Nota sobre `User`, `Account` e `reader`
-
-O enunciado usa "usuário" para representar a pessoa que utiliza a biblioteca. No projeto, essa ideia foi separada em duas partes:
-
-- `User`: entidade de domínio, com os dados do leitor da biblioteca.
-- `Account`: entidade de autenticação, com email, senha, status e role.
-- `reader`: role da conta que representa o usuário comum do enunciado.
-
-Essa separação evita misturar dados de biblioteca com credenciais de acesso. Ela também permite que contas administrativas, como `admin` e `librarian`, existam sem vínculo obrigatório com um leitor.
-
-Por isso, quando a documentação menciona `reader/user`, está se referindo ao usuário comum do case. No código, o nome técnico dessa role é `reader`.
-
-## Regras de Negócio Implementadas
-
-- O prazo padrão de empréstimo é de 14 dias.
-- A multa por atraso é de R$ 2,00 por dia completo.
-- Dias parciais de atraso não são arredondados para cima. Ex.: 14 dias e 2 horas de atraso cobram 14 dias.
-- Um usuário pode ter no máximo 3 empréstimos ativos.
-- Um livro indisponível não pode ser emprestado.
-- Um empréstimo aprovado marca o livro como indisponível.
-- Uma devolução marca o empréstimo como devolvido e libera o livro.
-- A multa é calculada na devolução com base na diferença entre a data atual e `expected_return_date`.
-- Um `reader/user` pode solicitar empréstimo, devolução ou renovação.
-- Apenas `admin` ou `librarian` pode aprovar/rejeitar solicitações e processar devoluções diretamente.
-- A renovação só é permitida para empréstimos ativos, não atrasados e com limite de uma renovação.
+- Prazo padrão: **14 dias**.
+- Multa por atraso: **R$ 2,00 por dia completo**.
+- Dias parciais não arredondam para cima.
+- Máximo de **3 empréstimos ativos por usuário**.
+- Livro indisponível não pode ser emprestado.
+- Aprovação de empréstimo marca o livro como indisponível.
+- Devolução marca o empréstimo como devolvido e libera o livro.
+- Renovação é permitida apenas uma vez, para empréstimo ativo e não atrasado.
 - Solicitações pendentes duplicadas para a mesma operação são bloqueadas.
+- `reader` solicita; `admin` e `librarian` aprovam, rejeitam e executam operações diretas.
 
-## Estados do Fluxo de Empréstimo
-
-O fluxo separa a solicitação do empréstimo efetivo. Por isso, existem dois conjuntos de estados:
+### Estados
 
 | Entidade | Status | Significado |
 | --- | --- | --- |
-| `LoanRequest` | `pending` | Solicitação criada pelo `reader/user`, aguardando análise do staff. |
-| `LoanRequest` | `approved` | Solicitação aprovada por `admin` ou `librarian`. Quando a solicitação é de empréstimo, um `Loan` ativo é criado. |
-| `LoanRequest` | `rejected` | Solicitação rejeitada por `admin` ou `librarian`, sem alterar o estado do livro/empréstimo. |
-| `Loan` | `active` | Empréstimo efetivamente criado e ainda não devolvido. O livro permanece indisponível. |
-| `Loan` | `returned` | Empréstimo devolvido. A data real de devolução e a multa, quando houver, ficam registradas. |
+| `LoanRequest` | `pending` | Solicitação criada e aguardando staff. |
+| `LoanRequest` | `approved` | Solicitação aprovada; a operação de domínio foi concluída. |
+| `LoanRequest` | `rejected` | Solicitação rejeitada sem alterar livro/empréstimo. |
+| `Loan` | `active` | Empréstimo efetivo ainda não devolvido. |
+| `Loan` | `returned` | Empréstimo devolvido, com multa registrada quando houver. |
 
-Na prática, `pending`, `approved` e `rejected` pertencem ao fluxo de aprovação (`LoanRequest`). O empréstimo em si (`Loan`) só nasce após aprovação ou criação direta por staff, e seus estados atuais são `active` e `returned`.
-
-## Fluxo de Empréstimo
-
-### Solicitação
+### Fluxos
 
 ```text
-reader/user -> POST /loan-requests/ -> LoanRequest pending
+reader -> POST /loan-requests/ -> LoanRequest pending
+staff  -> POST /loan-requests/{id}/approve -> Loan active
+staff  -> POST /loan-requests/{id}/reject -> LoanRequest rejected
+staff  -> PUT /loans/{id}/return -> Loan returned
+reader -> POST /return-requests/ -> staff approve -> Loan returned
+reader -> POST /renewal-requests/ -> staff approve -> due date + 14 days
 ```
-
-O usuário comum autenticado solicita o empréstimo de um livro. A aplicação valida se a conta é `reader`, se está vinculada a um `User`, se o livro existe e se não há uma solicitação pendente duplicada.
-
-### Aprovação
-
-```text
-admin/librarian -> POST /loan-requests/{id}/approve -> Loan active
-```
-
-Ao aprovar uma solicitação de empréstimo, o serviço cria um `Loan`, define o prazo de devolução em 14 dias, altera o livro para indisponível e marca a solicitação como aprovada.
-
-### Rejeição
-
-```text
-admin/librarian -> POST /loan-requests/{id}/reject -> LoanRequest rejected
-```
-
-Uma solicitação pendente pode ser rejeitada por staff com uma justificativa. Nesse caso, nenhum empréstimo é criado e a disponibilidade do livro não é alterada.
-
-### Devolução
-
-```text
-admin/librarian -> PUT /loans/{id}/return -> Loan returned
-reader/user -> POST /return-requests/ -> staff approve -> Loan returned
-```
-
-Na devolução, a aplicação calcula eventual multa, preenche `actual_return_date`, altera o status para `returned` e torna o livro disponível novamente.
-
-### Renovação
-
-```text
-reader/user -> POST /renewal-requests/ -> staff approve -> due date + 14 days
-```
-
-A renovação também passa por solicitação e aprovação. Quando aprovada, estende o prazo por mais 14 dias e incrementa `renewal_count`.
 
 ### Sequência Principal
 
 ```mermaid
 sequenceDiagram
-    actor Reader as reader/user
+    actor Reader as reader
     participant API as FastAPI
     participant RequestService as LoanRequestService
     participant LoanService as LoanService
@@ -415,49 +436,81 @@ sequenceDiagram
     RequestService->>DB: marca LoanRequest approved
 ```
 
-## Atomicidade no Fluxo de Empréstimos
+## Segurança, Autorização e Rate Limiting
 
-As operações mais sensíveis do projeto estão no fluxo de empréstimos. Por isso, `loan_service` e `loan_request_service` concentram as regras que precisam acontecer de forma consistente.
-
-No `loan_service`, a criação de um empréstimo e a devolução são tratadas como operações transacionais. A criação valida o usuário, confere o limite de 3 empréstimos ativos, valida se o livro existe, verifica a disponibilidade e só então cria o `Loan` e marca o `Book` como indisponível. Se qualquer etapa falhar, a transação é revertida e o estado do livro/empréstimo não fica parcialmente atualizado.
-
-Na devolução, a mesma ideia é aplicada: o serviço busca o empréstimo, valida se ele ainda está ativo, calcula a multa, preenche a data real de devolução, altera o status para `returned` e libera o livro. Essas mudanças são confirmadas juntas; em caso de erro, o rollback evita inconsistência entre `Loan` e `Book`.
-
-Também há uma preocupação com concorrência no momento de criar empréstimos. O serviço usa locks no Redis por usuário e por livro para reduzir o risco de duas requisições simultâneas emprestarem o mesmo exemplar ou ultrapassarem o limite de empréstimos ativos do usuário. Além disso, o repositório utiliza bloqueio pessimista com `with_for_update` ao buscar registros críticos.
-
-O `loan_request_service` orquestra o fluxo de aprovação. Quando um `admin` ou `librarian` aprova uma solicitação, ele delega a criação/devolução/renovação para `loan_service`. Assim, a solicitação só é marcada como `approved` depois que a operação de domínio foi concluída com sucesso. Se a regra de negócio falhar, a solicitação não avança indevidamente e o erro é retornado para o controller.
-
-## Autenticação e Autorização
+### Autenticação
 
 A autenticação usa JWT Bearer Token.
-
-Fluxo principal:
-
-1. Criar o primeiro administrador com `POST /auth/bootstrap`.
-2. Autenticar com `POST /auth/login`.
-3. Enviar o token nos endpoints protegidos:
 
 ```http
 Authorization: Bearer <access_token>
 ```
 
-A resposta de `POST /auth/login` retorna o token no body por simplicidade do case e para facilitar testes via Swagger/cURL. Em produção, especialmente em aplicações web, uma alternativa mais segura seria usar cookies `HttpOnly`, `Secure` e `SameSite`.
+Fluxo:
 
-O objeto `account` retornado no login expõe apenas dados essenciais para a interface (`id`, `name`, `email` e `role`). Campos internos como vínculo com usuário, status e datas de auditoria não são enviados nessa resposta para reduzir exposição desnecessária. As autorizações no backend continuam sendo validadas pelo JWT e pela conta carregada no servidor.
+1. `POST /auth/bootstrap` cria o primeiro administrador.
+2. `POST /auth/login` autentica e retorna JWT.
+3. Endpoints protegidos validam token e permissões no backend.
 
-O endpoint `GET /auth/me` ainda retorna o vínculo interno `user_id` porque o frontend atual usa esse campo para montar a área "Meu Espaço" do leitor e listar seus empréstimos. A evolução mais segura seria criar um endpoint orientado ao usuário autenticado, como `GET /me/loans` ou `GET /auth/me/loans`, para que o backend resolva esse vínculo a partir do token e o frontend não precise receber `user_id`. Depois disso, `/auth/me` também poderia ser reduzido para o mesmo formato mínimo usado no login.
+O login retorna o token no body por simplicidade do case e para facilitar Swagger/cURL. Em produção, especialmente em aplicações web, uma alternativa mais segura seria avaliar cookies `HttpOnly`, `Secure` e `SameSite`.
 
-Roles:
+O `account` retornado no login expõe apenas `id`, `name`, `email` e `role`. Campos internos como `user_id`, status e datas de auditoria não são enviados nessa resposta.
+
+`GET /auth/me` ainda retorna `user_id` porque o frontend atual usa esse vínculo para montar "Meu Espaço". Evolução recomendada: criar `GET /me/loans` ou `GET /auth/me/loans`, resolvendo o vínculo no backend a partir do token. Depois disso, `/auth/me` poderia usar o mesmo formato mínimo do login.
+
+### Roles
 
 | Role | Responsabilidade |
 | --- | --- |
 | `admin` | Gerencia contas, usuários, autores, livros e operações de empréstimo. |
 | `librarian` | Gerencia usuários, autores, livros e operações de empréstimo. |
-| `reader/user` | Usuário comum do case. Solicita empréstimos, devoluções e renovações. No código, esta role é `reader`. |
+| `reader` | Solicita empréstimos, devoluções e renovações. |
 
-## Cache com Redis
+### Rate Limiting
 
-O Redis é usado para cache de consultas frequentes e apoio a locks no fluxo de empréstimos.
+O rate limiting usa Redis e protege rotas sensíveis: login, bootstrap, criação de contas, criação de livros, autores, usuários e solicitações.
+
+A chave considera:
+
+- `account:{id}` quando há JWT válido;
+- IP quando não há token válido;
+- método HTTP e rota.
+
+Quando excede o limite, retorna `429 Too Many Requests` com `Retry-After`.
+
+Trade-off consciente: a implementação usa **fixed window**. É simples e suficiente para o case, mas pode permitir bursts em bordas de janela. Em produção, evoluiria para sliding window, token bucket ou script Lua atômico no Redis.
+
+Se Redis ficar indisponível, a API registra o problema e permite a requisição. Isso é **fail-open**: preserva disponibilidade local, mas reduz temporariamente proteção contra abuso.
+
+## Consistência, Cache e Concorrência
+
+### Atomicidade no Fluxo de Empréstimos
+
+Criação e devolução de empréstimos são operações transacionais:
+
+- valida usuário;
+- valida limite de 3 empréstimos ativos;
+- valida existência e disponibilidade do livro;
+- cria ou altera `Loan`;
+- altera disponibilidade de `Book`;
+- registra métrica de domínio.
+
+Se qualquer etapa falhar, a transação é revertida e o estado não fica parcialmente atualizado.
+
+### Controle de Concorrência
+
+O fluxo de criação usa duas proteções complementares:
+
+- **locks Redis por usuário e livro:** reduzem concorrência entre requisições simultâneas;
+- **`SELECT FOR UPDATE`:** bloqueio pessimista ao buscar registros críticos no banco.
+
+Isso evita cenários como:
+
+- duas requisições emprestarem o mesmo exemplar;
+- um usuário ultrapassar o limite de 3 empréstimos ativos;
+- aprovação de solicitação avançar sem a operação de domínio ter sido concluída.
+
+### Cache com Redis
 
 Consultas cacheadas:
 
@@ -467,61 +520,34 @@ Consultas cacheadas:
 - exemplares disponíveis por ISBN;
 - listagem de autores.
 
-O TTL usado nos caches de livros é curto, de 60 segundos. Foi uma escolha simples para ganhar desempenho em leituras frequentes sem criar uma estratégia complexa de invalidação. Quando um livro é criado ou um empréstimo muda a disponibilidade de um exemplar, os caches relacionados são invalidados.
+O TTL dos caches de livros é curto: **60 segundos**. A ideia é ganhar desempenho em leituras frequentes sem criar uma política complexa demais.
 
-Se o Redis estiver indisponível, a API registra o evento em log e segue consultando o banco. A ideia aqui é não derrubar o fluxo principal da biblioteca por falha em uma camada auxiliar.
+Invalidação ocorre quando:
 
-## Rate Limiting
+- livro é criado/removido;
+- empréstimo altera disponibilidade;
+- operações relevantes afetam contagem/listagem.
 
-O rate limiting usa Redis e foi aplicado em operações mais sensíveis, como login, bootstrap, criação de contas, criação de livros, autores, usuários e solicitações.
+Se Redis estiver indisponível, a API registra log e consulta o banco diretamente. Cache é otimização, não fonte de verdade.
 
-A chave considera:
+## Observabilidade
 
-- `account:{id}` quando o token JWT é válido;
-- IP do cliente quando não há token válido;
-- método HTTP e rota.
+### Logging
 
-Quando o limite é excedido, a API retorna `429 Too Many Requests` com header `Retry-After`.
+Logs estruturados em JSON via `app/core/logging.py`.
 
-A implementação usa uma janela fixa por chave Redis, iniciada no primeiro request daquela chave. Isso significa que, quando a janela está perto de expirar, o cliente pode receber `429` com um `Retry-After` baixo e voltar a consumir o limite após a expiração.
+Eventos com contexto adicional:
 
-Esse modelo é simples e suficiente para o escopo do case, mas tem o trade-off comum de fixed window: pode permitir bursts em bordas de janela. Em produção, uma evolução natural seria usar sliding window, token bucket ou um script Lua no Redis para combinar incremento e expiração de forma totalmente atômica.
-
-Se o Redis estiver indisponível, a aplicação registra o problema e permite a requisição. É um trade-off consciente: em um case local, preferi manter a API disponível em vez de bloquear a operação por indisponibilidade do Redis.
-
-## Tratamento de Erros
-
-As regras de domínio são modeladas com exceções customizadas nos services, por exemplo:
-
-- usuário não encontrado;
-- livro não encontrado;
-- livro indisponível;
-- limite de empréstimos excedido;
-- solicitação duplicada;
-- empréstimo já devolvido;
-- credenciais inválidas;
-- permissão insuficiente.
-
-Os controllers traduzem essas exceções para respostas HTTP apropriadas, como `401`, `403`, `404`, `409` e `422`.
-
-## Logging
-
-Os logs são estruturados em JSON por meio de `app/core/logging.py`.
-
-Os logs incluem campos adicionais em operações críticas, como:
-
-- criação de empréstimo;
-- devolução;
-- aprovação/rejeição de solicitações;
 - autenticação;
+- criação/devolução/renovação de empréstimo;
+- aprovação/rejeição de solicitações;
 - cache;
-- rate limiting.
+- rate limiting;
+- notificações.
 
-Campos sensíveis como senha e token são mascarados quando presentes no payload de log.
+Campos sensíveis como senha e token são mascarados quando aparecem no payload de log.
 
-## Health Check
-
-A API expõe um endpoint simples de observabilidade:
+### Health Check
 
 ```text
 GET /health
@@ -537,34 +563,29 @@ Resposta esperada:
 }
 ```
 
-Quando o banco não responde, `status` passa para `degraded`. Para Redis, o retorno pode ser `ok`, `unavailable` ou `disabled`, já que a aplicação continua funcionando sem cache/rate limit em modo degradado.
+Quando o banco falha, `status` passa para `degraded`. Para Redis, a resposta pode ser `ok`, `unavailable` ou `disabled`.
 
-## Métricas Operacionais
+### Métricas Operacionais
 
-Além do health check, a aplicação registra métricas simples de domínio no PostgreSQL para acompanhar ações importantes do fluxo de empréstimos. A ideia é dar visibilidade operacional sem adicionar infraestrutura extra ao case.
+Métricas simples de domínio são gravadas no PostgreSQL para rastrear o fluxo de empréstimos sem exigir Prometheus/Grafana no setup local.
 
 Eventos registrados:
 
-- solicitação de empréstimo/devolução/renovação criada;
+- solicitação criada;
 - solicitação aprovada;
 - solicitação rejeitada;
 - empréstimo criado;
 - empréstimo devolvido;
 - empréstimo renovado.
 
-O endpoint de leitura é restrito a `admin` e `librarian`:
+Endpoints restritos a `admin` e `librarian`:
 
 ```text
 GET /metrics/loans
-```
-
-Os eventos brutos de `loan_operation_metrics` também podem ser exportados em CSV por `admin` ou `librarian`:
-
-```text
 GET /metrics/loans/export.csv
 ```
 
-Exemplo de resposta:
+Exemplo:
 
 ```json
 {
@@ -581,13 +602,13 @@ Exemplo de resposta:
 }
 ```
 
-O registro dessas métricas é best effort: se a gravação da métrica falhar, a aplicação registra um warning, mas não desfaz uma operação de empréstimo já concluída. Em produção, uma evolução natural seria exportar esses sinais para Prometheus/Grafana ou outra solução de observabilidade.
+O registro de métricas é **best effort**: se falhar, a operação principal não é desfeita.
 
 ## Notificações de Vencimento
 
-A API também possui notificações de vencimento para empréstimos ativos que vencem em uma janela configurável. O disparo pode ser manual por endpoint ou automático por scheduler no startup da aplicação.
+A API possui notificações para empréstimos ativos que vencem em uma janela configurável.
 
-O endpoint manual é restrito a `admin` e `librarian`:
+Endpoint manual, restrito a staff:
 
 ```text
 POST /notifications/due-loans/send?days_ahead=1&channel=all
@@ -595,14 +616,18 @@ POST /notifications/due-loans/send?days_ahead=1&channel=all
 
 Parâmetros:
 
-- `days_ahead`: janela em dias, de `0` a `30`. O padrão é `1`.
-- `channel`: `email`, `webhook` ou `all`. O padrão é `all`.
+- `days_ahead`: `0` a `30`, padrão `1`;
+- `channel`: `email`, `webhook` ou `all`.
 
-O email é fake: a aplicação monta e registra o conteúdo da entrega, mas não usa SMTP. O webhook faz um `POST` HTTP real para `DUE_LOAN_WEBHOOK_URL`, com timeout curto. Quando a URL não está configurada ou o webhook falha, a falha é registrada de forma controlada na resposta e no histórico de notificações.
+Características:
 
-Para evitar reenvios duplicados, cada tentativa é persistida em `loan_due_notifications` com idempotência por empréstimo, canal e data da notificação. O scheduler automático usa lock Redis para evitar duplicidade quando a API roda com múltiplos processos ou réplicas.
+- email é fake no case: a mensagem é montada e registrada, sem SMTP;
+- webhook faz `POST` HTTP real para `DUE_LOAN_WEBHOOK_URL`;
+- histórico em `loan_due_notifications` evita reenvios duplicados por empréstimo/canal/data;
+- scheduler automático pode ser ligado por env;
+- scheduler usa lock Redis para evitar duplicidade com múltiplos processos/réplicas.
 
-Configurações:
+Configuração:
 
 ```env
 DUE_LOAN_NOTIFICATIONS_ENABLED=false
@@ -611,247 +636,60 @@ DUE_LOAN_NOTIFICATION_DAYS_AHEAD=1
 DUE_LOAN_WEBHOOK_URL=https://example.com/webhook
 ```
 
-O scheduler fica desligado por padrão por decisão consciente:
+O scheduler fica desligado por padrão. Trade-off: notificações automáticas podem duplicar mensagens, consumir recursos do processo web ou ocultar falhas se não forem protegidas. Em produção, a evolução natural seria fila assíncrona, retries com backoff, DLQ, provedor SMTP real, webhook assinado e alertas.
 
-```env
-DUE_LOAN_NOTIFICATIONS_ENABLED=false
-```
+## Banco de Dados e Migrations
 
-Notificações automáticas podem virar um ponto crítico se forem implementadas sem cuidado. Em uma API com múltiplos workers, réplicas ou restarts frequentes, uma rotina mal protegida pode enviar mensagens duplicadas, consumir recursos do processo web, bater repetidamente em serviços externos ou ocultar falhas de entrega. Por isso, mesmo no case, a implementação usa histórico persistido por empréstimo/canal/data e lock Redis no scheduler.
+O schema é versionado com Alembic. A aplicação não executa `Base.metadata.create_all` em runtime.
 
-Esse diferencial foi implementado porque houve tempo para modelar, testar e validar o comportamento com segurança mínima. Para produção, eu evoluiria essa abordagem com um provedor SMTP real para email, webhook real com autenticação/assinatura, retries com backoff, fila assíncrona, dead-letter/monitoramento, métricas de entrega e alertas. O modo fake de email fica intencionalmente limitado ao contexto do case e de testes locais.
-
-## Banco de Dados e Inicialização
-
-O schema do banco é versionado com Alembic. Em runtime, a aplicação não executa `Base.metadata.create_all`; as tabelas, índices e constraints são criados por migrations.
-
-A migration inicial está em:
+Migration inicial:
 
 ```text
 alembic/versions/0001_initial_schema.py
 ```
 
-Ela cria o schema atual completo, incluindo os índices parciais usados nas regras de domínio:
+Ela cria tabelas, relacionamentos e índices importantes:
 
 - email ativo único em `users`;
-- empréstimo ativo único por usuário/livro em `loans`;
-- índices de solicitações pendentes em `loan_requests`;
-- índices de leitura operacional em `loan_operation_metrics`.
+- empréstimo ativo único por usuário/livro;
+- índices de solicitações pendentes;
+- índices de leitura operacional em métricas.
 
-Para rodar migrations manualmente:
+No Docker Compose, a API executa `alembic upgrade head` antes de iniciar. Nos testes, as fixtures usam `Base.metadata.create_all/drop_all` para manter a suíte rápida e isolada.
 
-```bash
-make migrate
-```
+Em produção, migrations exigiriam validação incremental, backup, rollback e execução controlada sobre dados existentes.
 
-No Docker Compose, a API executa `alembic upgrade head` antes de iniciar o Uvicorn. Os testes continuam usando `Base.metadata.create_all/drop_all` nas fixtures para manter a suíte rápida e isolada.
+## Frontend Demonstrativo
 
-Para facilitar a reprodução, o fluxo local foi pensado para um banco novo, criado a partir das migrations. Isso evita passos manuais. Em um ambiente de producao, a estratégia seria diferente: as migrations seriam planejadas de forma incremental, com validação de compatibilidade, backup, rollback e execução controlada sobre dados existentes.
+O frontend em React/Vite implementa uma console operacional simples:
 
-## Como Rodar Localmente
+- login;
+- dashboard;
+- catálogo;
+- usuários;
+- empréstimos;
+- solicitações;
+- métricas;
+- notificações.
 
-### Pré-requisitos
+Ele existe principalmente para mostrar a API em fluxos reais e facilitar avaliação manual. Alguns pontos de UX, responsividade e acabamento ainda poderiam evoluir em um produto final. A prioridade do case continuou sendo backend: regras de negócio, consistência, segurança básica, testes e organização.
 
-- Docker
-- Docker Compose
-- Python 3.12 ou superior, caso deseje rodar fora do container
-
-### Variáveis de Ambiente
-
-Crie um `.env` com base em `.env-example`.
-
-```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/library
-TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/library_test
-REDIS_URL=redis://localhost:6379
-JWT_SECRET_KEY=change-me
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-RATE_LIMIT_ENABLED=true
-LOG_PRETTY_JSON=true
-CORS_ORIGINS=http://localhost:5173
-DUE_LOAN_NOTIFICATIONS_ENABLED=false
-DUE_LOAN_NOTIFICATION_INTERVAL_SECONDS=3600
-DUE_LOAN_NOTIFICATION_DAYS_AHEAD=1
-DUE_LOAN_WEBHOOK_URL=
-```
-
-### Subir API, Banco e Redis
-
-```bash
-make start
-```
-
-O container da API aplica as migrations antes de iniciar o servidor.
-
-A API ficará disponível em:
-
-```text
-http://localhost:8000
-```
-
-### Rodar Frontend React
-
-O frontend fica em `frontend/` e usa Vite. Ele lê a URL da API por `VITE_API_URL`, com padrão local:
-
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-Instale as dependências e inicie a interface:
+Rodar:
 
 ```bash
 make frontend-install
 make frontend
 ```
 
-A interface ficará disponível em:
-
 ```text
 http://localhost:5173
 ```
 
-Para o navegador conseguir chamar a API, o backend libera CORS para `http://localhost:5173` por padrão. Caso use outra origem, ajuste:
+Configuração:
 
 ```env
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-```
-
-O frontend implementa uma console operacional simples: login, dashboard, catálogo, usuários, empréstimos, solicitações, métricas e notificações. Ele foi pensado principalmente para mostrar a API funcionando em fluxos reais, facilitar a avaliação manual e dar contexto visual aos endpoints. Alguns pontos de UX, responsividade e acabamento ainda poderiam evoluir em um produto final; a prioridade deste case continuou sendo a API, suas regras de negócio, segurança básica, testes e organização backend.
-
-Documentação Swagger/OpenAPI:
-
-```text
-http://localhost:8000/docs
-```
-
-### Subir Apenas Banco e Redis
-
-```bash
-make db
-```
-
-### Rodar API Localmente com Virtualenv
-
-```bash
-make local
-```
-
-Esse comando cria o ambiente virtual, instala as dependências, aplica as migrations e inicia o Uvicorn.
-
-Caso as dependências já estejam instaladas:
-
-```bash
-make local-soft
-```
-
-Também é possível aplicar apenas as migrations:
-
-```bash
-make migrate
-```
-
-Para criar uma nova migration depois de alterar models:
-
-```bash
-make revision m="descricao_da_migration"
-```
-
-### Dados de Exemplo
-
-As migrations criam apenas estrutura de banco. Para facilitar testes manuais em ambiente local, existe um seed opcional:
-
-```bash
-make seed
-```
-
-Esse comando aplica as migrations e cria dados mínimos de demonstração de forma idempotente:
-
-- conta `admin`;
-- conta `librarian`;
-- usuário da biblioteca;
-- conta `reader` vinculada ao usuário;
-- autores;
-- livros disponíveis para empréstimo.
-
-Credenciais locais criadas pelo seed:
-
-| Perfil | Email | Senha |
-| --- | --- | --- |
-| `admin` | `admin@example.com` | `strong-password` |
-| `librarian` | `librarian@example.com` | `strong-password` |
-| `reader` | `reader-account@example.com` | `strong-password` |
-
-O seed não faz parte das migrations e não é executado automaticamente. A ideia é manter schema e dados de desenvolvimento separados.
-
-### Parar Containers
-
-```bash
-make stop
-```
-
-## Como Rodar os Testes
-
-Suba o banco de teste e Redis:
-
-```bash
-make test_db
-```
-
-Execute os testes:
-
-```bash
-pytest
-```
-
-Os testes usam `TEST_DATABASE_URL` e recriam as tabelas durante a execução das fixtures.
-
-Para gerar relatório de cobertura no terminal:
-
-```bash
-pytest --cov=app --cov-report=term-missing
-```
-
-Ou, usando o Makefile:
-
-```bash
-make coverage
-```
-
-## Testes Manuais de QA
-
-Além dos testes automatizados, foi executado um roteiro manual de QA cobrindo autenticação, autorização, usuários, catálogo, empréstimos, solicitações, métricas, health check, cache, rate limit e concorrência.
-
-O relatório completo está em [docs/manual-qa-report.md](docs/manual-qa-report.md).
-
-Durante a execução manual foram encontradas falhas de borda em validação de IDs, paginação e consulta de ISBN inexistente. Esses pontos foram corrigidos e revalidados: parâmetros inválidos retornam `422`, ISBN válido inexistente retorna `404`, ISBN existente sem disponibilidade retorna `200` com zero/lista vazia, e solicitação de empréstimo por `reader` para livro existente retorna `201 pending`.
-
-## Padrão de Código
-
-O projeto usa Ruff como formatter e linter. A ideia é ter um padrão simples, parecido com Prettier.
-
-Para verificar lint:
-
-```bash
-make lint
-```
-
-Para aplicar formatação:
-
-```bash
-make format
-```
-
-Para rodar lint e testes juntos:
-
-```bash
-make check
-```
-
-Antes de entregar ou abrir uma contribuição, o fluxo recomendado é rodar `make lint` e `venv/bin/pytest`. Se o objetivo for aplicar correções automáticas seguras de lint, use:
-
-```bash
-make lint-fix
+VITE_API_URL=http://localhost:8000
+CORS_ORIGINS=http://localhost:5173
 ```
 
 ## Endpoints Principais
@@ -879,15 +717,15 @@ make lint-fix
 | `POST` | `/users/` | Cria usuário. Requer `admin` ou `librarian`. |
 | `GET` | `/users/` | Lista usuários. |
 | `GET` | `/users/{user_id}` | Busca usuário por ID. |
-| `PUT` | `/users/{user_id}` | Atualiza usuário. Requer `admin` ou `librarian`. |
-| `DELETE` | `/users/{user_id}` | Remove usuário logicamente. Requer `admin` ou `librarian`. |
+| `PUT` | `/users/{user_id}` | Atualiza usuário. Requer staff. |
+| `DELETE` | `/users/{user_id}` | Remove usuário logicamente. Requer staff. |
 | `GET` | `/users/{user_id}/loans` | Lista empréstimos de um usuário. |
 
 ### Autores
 
 | Método | Endpoint | Descrição |
 | --- | --- | --- |
-| `POST` | `/authors/` | Cria autor. Requer `admin` ou `librarian`. |
+| `POST` | `/authors/` | Cria autor. Requer staff. |
 | `GET` | `/authors/` | Lista autores. |
 | `GET` | `/authors/{author_id}` | Busca autor por ID. |
 
@@ -895,10 +733,10 @@ make lint-fix
 
 | Método | Endpoint | Descrição |
 | --- | --- | --- |
-| `POST` | `/books/` | Cria livro vinculado a autor. Requer `admin` ou `librarian`. |
+| `POST` | `/books/` | Cria livro vinculado a autor. Requer staff. |
 | `GET` | `/books/` | Lista livros. |
 | `GET` | `/books/{book_id}` | Busca livro por ID. |
-| `DELETE` | `/books/{book_id}` | Remove livro logicamente. Requer `admin` ou `librarian`. |
+| `DELETE` | `/books/{book_id}` | Remove livro logicamente. Requer staff. |
 | `GET` | `/books/count/{isbn}` | Conta exemplares disponíveis por ISBN. |
 | `GET` | `/books/exemplars/{isbn}` | Lista exemplares disponíveis por ISBN. |
 
@@ -906,45 +744,45 @@ make lint-fix
 
 | Método | Endpoint | Descrição |
 | --- | --- | --- |
-| `POST` | `/loans/` | Cria empréstimo direto. Requer `admin` ou `librarian`. |
-| `GET` | `/loans/` | Lista empréstimos com filtros opcionais `status`, `user_id` e `overdue`. |
+| `POST` | `/loans/` | Cria empréstimo direto. Requer staff. |
+| `GET` | `/loans/` | Lista empréstimos com filtros opcionais. |
 | `GET` | `/loans/active` | Lista empréstimos ativos. |
 | `GET` | `/loans/overdue` | Lista empréstimos atrasados. |
 | `GET` | `/loans/{loan_id}` | Busca empréstimo por ID. |
-| `PUT` | `/loans/{loan_id}/return` | Processa devolução direta. Requer `admin` ou `librarian`. |
+| `PUT` | `/loans/{loan_id}/return` | Processa devolução direta. Requer staff. |
 
-Filtros disponíveis em `GET /loans/`:
+Filtros de `GET /loans/`:
 
 | Query param | Descrição |
 | --- | --- |
-| `status` | Filtra por `active` ou `returned`. |
+| `status` | `active` ou `returned`. |
 | `user_id` | Filtra por usuário. |
-| `overdue` | Quando `true`, retorna empréstimos ativos com prazo vencido. |
+| `overdue` | Quando `true`, retorna ativos vencidos. |
 | `skip` / `limit` | Paginação. |
 
 ### Solicitações
 
 | Método | Endpoint | Descrição |
 | --- | --- | --- |
-| `POST` | `/loan-requests/` | Solicita empréstimo. Requer conta `reader/user`. |
-| `GET` | `/loan-requests/` | Lista solicitações. Requer `admin` ou `librarian`. |
-| `POST` | `/loan-requests/{request_id}/approve` | Aprova solicitação. Requer `admin` ou `librarian`. |
-| `POST` | `/loan-requests/{request_id}/reject` | Rejeita solicitação. Requer `admin` ou `librarian`. |
-| `POST` | `/return-requests/` | Solicita devolução. Requer conta `reader/user`. |
-| `POST` | `/renewal-requests/` | Solicita renovação. Requer conta `reader/user`. |
+| `POST` | `/loan-requests/` | Solicita empréstimo. Requer `reader`. |
+| `GET` | `/loan-requests/` | Lista solicitações. Requer staff. |
+| `POST` | `/loan-requests/{request_id}/approve` | Aprova solicitação. Requer staff. |
+| `POST` | `/loan-requests/{request_id}/reject` | Rejeita solicitação. Requer staff. |
+| `POST` | `/return-requests/` | Solicita devolução. Requer `reader`. |
+| `POST` | `/renewal-requests/` | Solicita renovação. Requer `reader`. |
 
 ### Métricas
 
 | Método | Endpoint | Descrição |
 | --- | --- | --- |
-| `GET` | `/metrics/loans` | Retorna resumo operacional de empréstimos. Requer `admin` ou `librarian`. |
-| `GET` | `/metrics/loans/export.csv` | Exporta eventos operacionais de empréstimos em CSV. Requer `admin` ou `librarian`. |
+| `GET` | `/metrics/loans` | Resumo operacional de empréstimos. Requer staff. |
+| `GET` | `/metrics/loans/export.csv` | Exporta eventos operacionais em CSV. Requer staff. |
 
 ### Notificações
 
 | Método | Endpoint | Descrição |
 | --- | --- | --- |
-| `POST` | `/notifications/due-loans/send` | Dispara notificações de vencimento por email fake, webhook real ou ambos. Requer `admin` ou `librarian`. |
+| `POST` | `/notifications/due-loans/send` | Dispara notificações de vencimento por email fake, webhook ou ambos. Requer staff. |
 
 ## Exemplos de Uso
 
@@ -971,13 +809,11 @@ curl -X POST http://localhost:8000/auth/login \
   }'
 ```
 
-Use o `access_token` retornado nos próximos requests:
-
 ```bash
 export TOKEN="<access_token>"
 ```
 
-### 3. Criar Usuário da Biblioteca
+### 3. Criar Usuário e Conta Reader
 
 ```bash
 curl -X POST http://localhost:8000/users/ \
@@ -988,8 +824,6 @@ curl -X POST http://localhost:8000/users/ \
     "email": "reader@example.com"
   }'
 ```
-
-### 4. Criar Conta Reader/User Vinculada ao Usuário
 
 ```bash
 curl -X POST http://localhost:8000/accounts/ \
@@ -1004,18 +838,14 @@ curl -X POST http://localhost:8000/accounts/ \
   }'
 ```
 
-### 5. Criar Autor
+### 4. Criar Autor e Livro
 
 ```bash
 curl -X POST http://localhost:8000/authors/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "Machado de Assis"
-  }'
+  -d '{"name": "Machado de Assis"}'
 ```
-
-### 6. Criar Livro
 
 ```bash
 curl -X POST http://localhost:8000/books/ \
@@ -1029,68 +859,36 @@ curl -X POST http://localhost:8000/books/ \
   }'
 ```
 
-### 7. Solicitar Empréstimo
-
-Autentique com a conta `reader` e use o token dela:
+### 5. Solicitar e Aprovar Empréstimo
 
 ```bash
 curl -X POST http://localhost:8000/loan-requests/ \
   -H "Authorization: Bearer $READER_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "book_id": 1
-  }'
+  -d '{"book_id": 1}'
 ```
-
-### 8. Aprovar Solicitação
 
 ```bash
 curl -X POST http://localhost:8000/loan-requests/1/approve \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 9. Processar Devolução Direta
+### 6. Devolver, Consultar e Exportar
 
 ```bash
 curl -X PUT http://localhost:8000/loans/1/return \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 10. Consultar Empréstimos de um Usuário
-
-```bash
-curl http://localhost:8000/users/1/loans?skip=0\&limit=100 \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### 11. Consultar Empréstimos Ativos
-
 ```bash
 curl http://localhost:8000/loans/active?skip=0\&limit=100 \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 12. Consultar Empréstimos Atrasados
-
 ```bash
 curl http://localhost:8000/loans/overdue?skip=0\&limit=100 \
   -H "Authorization: Bearer $TOKEN"
 ```
-
-### 13. Health Check
-
-```bash
-curl http://localhost:8000/health
-```
-
-### 14. Consultar Métricas de Empréstimos
-
-```bash
-curl http://localhost:8000/metrics/loans \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### 15. Exportar Métricas de Empréstimos em CSV
 
 ```bash
 curl http://localhost:8000/metrics/loans/export.csv \
@@ -1098,38 +896,63 @@ curl http://localhost:8000/metrics/loans/export.csv \
   -o loan_operation_metrics.csv
 ```
 
-### 16. Disparar Notificações de Vencimento
+### 7. Notificações de Vencimento
 
 ```bash
 curl -X POST "http://localhost:8000/notifications/due-loans/send?days_ahead=1&channel=all" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-## Collection Postman
+### 8. Health Check
 
-A collection Postman está disponível em:
+```bash
+curl http://localhost:8000/health
+```
+
+## Postman
+
+Collection:
 
 ```text
 docs/library-api.postman_collection.json
 ```
 
-Ela cobre o fluxo que eu usaria para avaliar rapidamente a API: bootstrap, login, criação de usuário/conta reader, autor, livro, solicitação de empréstimo, aprovação, listagem de ativos, devolução e histórico por usuário.
+```text
+docs/Library API.postman_collection.json
+```
+
+
+Ela cobre o fluxo principal de avaliação manual: bootstrap, login, criação de usuário/conta reader, autor, livro, solicitação, aprovação, ativos, devolução e histórico por usuário.
+
+## Padrão de Código
+
+O projeto usa Ruff como formatter e linter.
+
+```bash
+make lint
+make format
+make lint-fix
+```
 
 ## Decisões Arquiteturais e Trade-offs
 
-- **Camadas explícitas**: controllers, services e repositories deixam o fluxo mais fácil de revisar e testar.
-- **`Account` separado de `User`**: separa credenciais de acesso dos dados do leitor da biblioteca.
-- **Role `reader` para usuário comum**: no enunciado esse papel aparece como `user`; usei `reader` para não confundir a role com a entidade `User`.
-- **Alembic para schema**: o banco da aplicação é criado por migrations versionadas; `create_all` fica restrito aos testes.
-- **Cache com TTL curto**: melhora leituras frequentes sem exigir uma política pesada de invalidação.
-- **Locks Redis no empréstimo**: reduzem o risco de concorrência ao tentar emprestar o mesmo livro ou atingir o limite de um usuário.
-- **Catálogo sem update bibliográfico**: livros podem ser removidos logicamente, mas ISBN/título/autor não são editados por endpoint público para preservar histórico de empréstimos.
-- **Métricas no banco**: deixam a avaliação local simples e dão visibilidade ao fluxo de empréstimos sem exigir Prometheus/Grafana no setup.
-- **Rate limiting fail-open**: uma falha no Redis não derruba a API, mas reduz temporariamente a proteção contra abuso.
-- **Exceções de domínio**: deixam as regras de negócio nos services e a tradução HTTP nos controllers.
+- **Camadas explícitas:** melhoram leitura, testes e manutenção.
+- **`Account` separado de `User`:** separa autenticação de dados do leitor.
+- **Role `reader`:** evita confusão entre papel de acesso e entidade `User`.
+- **Alembic para schema:** migrations versionadas; `create_all` fica restrito aos testes.
+- **Cache com TTL curto:** melhora leitura sem complexidade alta de invalidação.
+- **Locks Redis + `SELECT FOR UPDATE`:** reduzem risco de corrida em empréstimos.
+- **Catálogo sem update bibliográfico:** preserva histórico de empréstimos.
+- **Métricas no banco:** observabilidade local sem infraestrutura extra.
+- **Rate limiting fail-open:** preserva disponibilidade local se Redis falhar, aceitando perda temporária de proteção.
+- **Email fake:** suficiente para demonstrar fluxo sem depender de SMTP externo.
+- **Frontend demonstrativo:** ajuda avaliação manual, mas não é o foco técnico principal.
 
 ## Melhorias Futuras
 
-- Evoluir métricas para Prometheus/Grafana, com dashboards e alertas.
+- Criar endpoint `GET /me/loans` para remover `user_id` de `/auth/me`.
+- Evoluir rate limiting para sliding window/token bucket com operação Redis atômica.
+- Exportar métricas para Prometheus/Grafana com dashboards e alertas.
+- Migrar notificações para fila assíncrona com retry, DLQ e provedor SMTP real.
+- Expandir testes de autorização e concorrência sob carga.
 - Padronizar completamente a nomenclatura pública entre `reader` e `user`, se desejado.
-- Expandir testes de integração para mais cenários de autorização e concorrência.
