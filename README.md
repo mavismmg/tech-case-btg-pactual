@@ -267,7 +267,8 @@ Por isso, quando a documentação menciona `reader/user`, está se referindo ao 
 ## Regras de Negócio Implementadas
 
 - O prazo padrão de empréstimo é de 14 dias.
-- A multa por atraso é de R$ 2,00 por dia.
+- A multa por atraso é de R$ 2,00 por dia completo.
+- Dias parciais de atraso não são arredondados para cima. Ex.: 14 dias e 2 horas de atraso cobram 14 dias.
 - Um usuário pode ter no máximo 3 empréstimos ativos.
 - Um livro indisponível não pode ser emprestado.
 - Um empréstimo aprovado marca o livro como indisponível.
