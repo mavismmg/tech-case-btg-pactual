@@ -11,6 +11,7 @@ class BookCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     published_date: date = Field(..., le=date.today())
 
+
 class BookResponse(BaseModel):
     id: int
     isbn: str

@@ -94,3 +94,9 @@ def get_active_loans_count_by_user_id(db: Session, user_id: int) -> int:
     logger.info(f"Counting active loans for user ID: {user_id}")
 
     return db.query(Loan).filter(Loan.user_id == user_id, Loan.status == LoanStatus.ACTIVE).count()
+
+
+def get_active_loans_count_by_book_id(db: Session, book_id: int) -> int:
+    logger.info(f"Counting active loans for book ID: {book_id}")
+
+    return db.query(Loan).filter(Loan.book_id == book_id, Loan.status == LoanStatus.ACTIVE).count()

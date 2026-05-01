@@ -4,7 +4,7 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 from app.core import cache
 from app.models.author import Author
-from app.repositories import author_repository, book_repository
+from app.repositories import author_repository, book_repository, loan_repository
 from app.schemas.book import BookCreate
 from app.models.book import Book
 
@@ -33,6 +33,12 @@ class BookCreationError(Exception):
         super().__init__(self.message)
 
 
+class BookHasActiveLoansError(Exception):
+    def __init__(self, book_id: int):
+        self.message = f"Cannot delete book with ID {book_id}. Book has active loans."
+        super().__init__(self.message)
+
+
 def _available_count_cache_key(isbn: str) -> str:
     return AVAILABLE_COUNT_CACHE_KEY.format(isbn=isbn)
 
@@ -58,6 +64,18 @@ def invalidate_available_exemplars_cache(isbn: str) -> None:
 
 def invalidate_book_list_cache() -> None:
     cache.delete_by_prefix(BOOK_LIST_CACHE_PREFIX)
+
+
+def invalidate_book_detail_cache(book_id: int) -> None:
+    cache.delete_keys(_book_detail_cache_key(book_id))
+
+
+def invalidate_book_cache(book_id: int, *isbns: str | None) -> None:
+    invalidate_book_detail_cache(book_id)
+    invalidate_book_list_cache()
+    for isbn in isbns:
+        if isbn is not None:
+            invalidate_available_exemplars_cache(isbn)
 
 
 def _serialize_datetime(value: datetime | None) -> str | None:
@@ -212,6 +230,49 @@ def get_book(db: Session, book_id: int) -> Book:
 
     cache.set_json(cache_key, _serialize_book(book), BOOK_CACHE_TTL_SECONDS)
     return book
+
+
+def _get_book_for_write(db: Session, book_id: int, operation: str) -> Book:
+    book = book_repository.get_book_by_id(db, book_id)
+
+    if not book:
+        logger.warning(
+            "Book write operation blocked because book was not found",
+            extra={"operation": operation, "book_id": book_id, "reason": "book_not_found"},
+        )
+        raise BookNotFoundError(book_id)
+
+    return book
+
+
+def delete_book(db: Session, book_id: int) -> Book:
+    operation = "delete_book"
+    book = _get_book_for_write(db, book_id, operation)
+
+    active_loans = loan_repository.get_active_loans_count_by_book_id(db, book_id)
+    if active_loans > 0:
+        logger.warning(
+            "Book deletion blocked because book has active loans",
+            extra={
+                "operation": operation,
+                "book_id": book_id,
+                "active_loans": active_loans,
+                "reason": "active_loans_exist",
+            },
+        )
+        raise BookHasActiveLoansError(book_id)
+
+    try:
+        deleted_book = book_repository.soft_delete_book(db, book)
+        invalidate_book_cache(deleted_book.id, deleted_book.isbn)
+        logger.info("Book soft deleted successfully", extra={"operation": operation, "book_id": book_id})
+
+        return deleted_book
+    except (BookNotFoundError, BookHasActiveLoansError):
+        raise
+    except Exception:
+        logger.exception("Unexpected error while deleting book", extra={"operation": operation, "book_id": book_id})
+        raise
 
 def count_available_exemplars(db: Session, isbn: str) -> int:
     logger.debug("Counting available exemplars", extra={"operation": "count_available_exemplars", "isbn": isbn})

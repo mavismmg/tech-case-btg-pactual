@@ -9,7 +9,12 @@ from app.models.account import AccountRole
 from app.schemas.book import AvailableExemplarsCountResponse, BookCreate, BookResponse
 from app.schemas.common import PaginatedResponse
 from app.services import book_service
-from app.services.book_service import BookNotFoundError, BookAuthorNotFoundError, BookCreationError
+from app.services.book_service import (
+    BookAuthorNotFoundError,
+    BookCreationError,
+    BookHasActiveLoansError,
+    BookNotFoundError,
+)
 
 router = APIRouter(prefix="/books", tags=["Books"])
 librarian_or_admin = Depends(require_roles(AccountRole.ADMIN, AccountRole.LIBRARIAN))
@@ -87,5 +92,25 @@ def get_book(book_id: int, db: Session = Depends(get_db)) -> BookResponse:
     except BookNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
+            detail=e.message
+        )
+
+
+@router.delete(
+    "/{book_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[librarian_or_admin, Depends(rate_limit(limit=10))],
+)
+def delete_book(book_id: int, db: Session = Depends(get_db)) -> None:
+    try:
+        book_service.delete_book(db, book_id)
+    except BookNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.message
+        )
+    except BookHasActiveLoansError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=e.message
         )

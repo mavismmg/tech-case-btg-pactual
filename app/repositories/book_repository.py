@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.book import Book
@@ -35,7 +37,7 @@ def create_book(db: Session, book_data: BookCreate) -> Book:
 def get_books(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Book], int]:
     logger.info("Fetching books from database")
     
-    query = db.query(Book).options(joinedload(Book.author))
+    query = db.query(Book).options(joinedload(Book.author)).filter(Book.deleted_at.is_(None))
     total = query.count()
     books = query.order_by(Book.published_date).offset(skip).limit(limit).all()
     return books, total
@@ -46,17 +48,39 @@ def get_book_by_id(db: Session, book_id: int) -> Book | None:
     return (
         db.query(Book)
         .options(joinedload(Book.author))
-        .filter(Book.id == book_id)
+        .filter(Book.id == book_id, Book.deleted_at.is_(None))
         .with_for_update(of=Book)
         .first()
     )
 
+
+def soft_delete_book(db: Session, db_book: Book) -> Book:
+    try:
+        db_book.deleted_at = datetime.now(timezone.utc)
+        db_book.is_available = False
+
+        db.commit()
+        db.refresh(db_book)
+
+        return db_book
+    except SQLAlchemyError as e:
+        db.rollback()
+
+        logger.error(f"Error while soft deleting book: {str(e)}", exc_info=True)
+
+        raise e
+
 def count_exemplars_by_isbn(db: Session, isbn: str) -> int:
     logger.info(f"Counting exemplars for ISBN: {isbn}")
 
-    return db.query(Book).filter(Book.isbn == isbn, Book.is_available.is_(True)).count()
+    return db.query(Book).filter(Book.isbn == isbn, Book.is_available.is_(True), Book.deleted_at.is_(None)).count()
 
 def get_exemplars_by_isbn(db: Session, isbn: str) -> list[Book]:
     logger.info(f"Fetching exemplars for ISBN: {isbn}")
 
-    return db.query(Book).options(joinedload(Book.author)).filter(Book.isbn == isbn, Book.is_available.is_(True)).all()
+    return (
+        db.query(Book)
+        .options(joinedload(Book.author))
+        .filter(Book.isbn == isbn, Book.is_available.is_(True), Book.deleted_at.is_(None))
+        .all()
+    )

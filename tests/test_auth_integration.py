@@ -97,6 +97,15 @@ def test_librarian_can_create_author_and_book(client, db):
     assert book_response.status_code == 201
     assert book_response.json()["title"] == "Test Book"
 
+    delete_response = client.delete(
+        f"/books/{book_response.json()['id']}",
+        headers=headers,
+    )
+    assert delete_response.status_code == 204
+
+    get_deleted_response = client.get(f"/books/{book_response.json()['id']}")
+    assert get_deleted_response.status_code == 404
+
 
 def test_auth_flow_create_and_return_loan(client):
     _bootstrap_admin(client)

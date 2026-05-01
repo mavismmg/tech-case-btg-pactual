@@ -6,6 +6,7 @@ from app.schemas.user import UserCreate
 from app.services import author_service, book_service
 from app.services.author_service import create_author
 from app.services.book_service import create_book
+from app.services.book_service import BookHasActiveLoansError, BookNotFoundError
 from app.services.loan_service import create_loan, return_loan
 from app.services.user_service import create_user
 
@@ -189,6 +190,49 @@ def test_book_creation_invalidates_book_list_cache(db, monkeypatch):
 
     assert book_service._book_list_cache_key(0, 100) not in fake_cache.values
     assert book_service._book_list_cache_key(0, 100) in fake_cache.deleted_keys
+
+
+def test_delete_book_is_soft_delete_and_blocks_active_loan(db):
+    user = create_user(db, UserCreate(name="Book Delete User", email="book-delete@example.com"))
+    author = create_author(db, AuthorCreate(name="Book Delete Author"))
+    blocked_book = create_book(
+        db,
+        BookCreate(
+            isbn="1234567890",
+            author_id=author.id,
+            title="Blocked Delete Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+    deletable_book = create_book(
+        db,
+        BookCreate(
+            isbn="1234567891",
+            author_id=author.id,
+            title="Deletable Book",
+            published_date=date(2023, 1, 1),
+        ),
+    )
+    create_loan(db, user.id, blocked_book.id)
+
+    try:
+        book_service.delete_book(db, blocked_book.id)
+    except BookHasActiveLoansError:
+        pass
+    else:
+        raise AssertionError("book with active loan should not be deleted")
+
+    deleted_book = book_service.delete_book(db, deletable_book.id)
+
+    assert deleted_book.deleted_at is not None
+    assert deleted_book.is_available is False
+
+    try:
+        book_service.get_book(db, deletable_book.id)
+    except BookNotFoundError:
+        pass
+    else:
+        raise AssertionError("soft deleted book should not be returned by get_book")
 
 
 def test_list_authors_uses_cache_and_create_author_invalidates_list(db, monkeypatch):
