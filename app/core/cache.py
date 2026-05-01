@@ -102,6 +102,25 @@ def delete_keys(*keys: str) -> None:
         logger.warning("Failed to delete cache keys %s: %s", keys, exc)
 
 
+def delete_by_prefix(prefix: str) -> None:
+    client = get_redis_client()
+    if client is None:
+        logger.info("Redis cache prefix invalidation skipped for prefix %s", prefix)
+        return
+
+    try:
+        pattern = f"{prefix}*"
+        keys = list(client.scan_iter(match=pattern))
+        if not keys:
+            logger.info("Redis cache prefix invalidation found no keys for prefix %s", prefix)
+            return
+
+        deleted_count = client.delete(*keys)
+        logger.info("Redis cache invalidated prefix=%s deleted=%s", prefix, deleted_count)
+    except REDIS_EXCEPTIONS as exc:
+        logger.warning("Failed to delete cache keys with prefix %s: %s", prefix, exc)
+
+
 @contextmanager
 def redis_lock(
     key: str,
