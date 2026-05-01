@@ -42,7 +42,7 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)) -> Acc
         )
     except (ReaderAccountRequiresUserError, StaffAccountCannotHaveUserError) as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=e.message,
         )
 
@@ -60,6 +60,7 @@ def list_accounts(
 ) -> PaginatedResponse[AccountResponse]:
     accounts, total = account_service.list_accounts(db, skip, limit)
     account_responses = [AccountResponse.model_validate(account) for account in accounts]
+
     return PaginatedResponse(items=account_responses, total=total, skip=skip, limit=limit)
 
 
@@ -71,6 +72,7 @@ def list_accounts(
 def deactivate_account(account_id: PositivePathId, db: Session = Depends(get_db)) -> None:
     try:
         account_service.deactivate_account(db, account_id)
+
     except AccountNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
