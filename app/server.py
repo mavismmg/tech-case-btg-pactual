@@ -7,7 +7,7 @@ load_dotenv()
 configure_logging()
 
 from app.core.database import Base, engine
-from app.models import account
+from app.models import account, loan_operation_metric
 from app.controllers import user_controller
 from app.controllers import book_controller
 from app.controllers import loan_controller
@@ -16,6 +16,7 @@ from app.controllers import auth_controller
 from app.controllers import account_controller
 from app.controllers import loan_request_controller
 from app.controllers import health_controller
+from app.controllers import metrics_controller
 
 app = FastAPI(title="Library API")
 
@@ -81,3 +82,4 @@ app.include_router(book_controller.router)
 app.include_router(loan_controller.router)
 app.include_router(loan_request_controller.router)
 app.include_router(author_controller.router)
+app.include_router(metrics_controller.router)
