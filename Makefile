@@ -56,7 +56,7 @@ coverage:
 	$(PYTEST) --cov=app --cov-report=term-missing
 
 frontend-install:
-	npm --prefix frontend install
+	npm --prefix frontend ci
 
 frontend:
 	npm --prefix frontend run dev
