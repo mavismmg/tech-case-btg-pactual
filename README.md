@@ -715,6 +715,18 @@ pytest
 
 Os testes usam `TEST_DATABASE_URL` e recriam as tabelas durante a execução das fixtures.
 
+Para gerar relatório de cobertura no terminal:
+
+```bash
+pytest --cov=app --cov-report=term-missing
+```
+
+Ou, usando o Makefile:
+
+```bash
+make coverage
+```
+
 ## Testes Manuais de QA
 
 Além dos testes automatizados, foi executado um roteiro manual de QA cobrindo autenticação, autorização, usuários, catálogo, empréstimos, solicitações, métricas, health check, cache, rate limit e concorrência.
