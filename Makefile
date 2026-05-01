@@ -4,8 +4,9 @@ PIP=$(VENV_DIR)/bin/pip
 UVICORN=$(VENV_DIR)/bin/uvicorn
 PYTEST=$(VENV_DIR)/bin/pytest
 RUFF=$(VENV_DIR)/bin/ruff
+ALEMBIC=$(VENV_DIR)/bin/alembic
 
-.PHONY: install start db test_db stop local local-soft format lint lint-fix test check
+.PHONY: install start db test_db stop local local-soft migrate revision seed format lint lint-fix test check
 
 install:
 	$(PYTHON) -m venv $(VENV_DIR)
@@ -24,20 +25,29 @@ test_db:
 stop:
 	docker compose down
 
-local: install
+local: install migrate
 	$(UVICORN) app.server:app --reload --host 0.0.0.0 --port 8000
 
-local-soft:
+local-soft: migrate
 	$(UVICORN) app.server:app --reload --host 0.0.0.0 --port 8000
+
+migrate:
+	$(ALEMBIC) upgrade head
+
+revision:
+	$(ALEMBIC) revision --autogenerate -m "$(m)"
+
+seed: migrate
+	$(VENV_DIR)/bin/python scripts/seed_dev.py
 
 format:
-	$(RUFF) format app tests
+	$(RUFF) format app tests alembic scripts
 
 lint:
-	$(RUFF) check app tests
+	$(RUFF) check app tests alembic scripts
 
 lint-fix:
-	$(RUFF) check app tests --fix
+	$(RUFF) check app tests alembic scripts --fix
 
 test:
 	$(PYTEST)
