@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 import app.core.rate_limit as rate_limit_module
 from app.core.database import Base
 from app.dependencies import get_db
-from app.models import account
+import app.models
 from app.server import app
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
