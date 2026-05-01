@@ -1,0 +1,27 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    # FastAPI intentionally uses function calls like Depends(...) in default arguments.
+    "B008",
+    # Existing controllers translate domain exceptions to HTTPException directly.
+    "B904",
+    # Some modules intentionally load environment/config before importing app modules.
+    "E402",
+    # Keep existing imports stable close to delivery; format can be applied in a later cleanup pass.
+    "I001",
+    # Keep timezone.utc for compatibility/readability in the current codebase.
+    "UP017",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/server.py" = ["F401"]
+"tests/conftest.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
