@@ -297,6 +297,8 @@ Por esse motivo, a API não expõe um endpoint público para alterar `isbn`, `ti
 Para preservar rastreabilidade, o catálogo segue uma abordagem mais conservadora:
 
 - dados bibliográficos são definidos na criação do livro;
+- múltiplos exemplares com mesmo `title`, `author_id` e `isbn` são permitidos;
+- um mesmo `title` para o mesmo autor com ISBN diferente é bloqueado para evitar cadastro incoerente;
 - remoção usa soft delete, mantendo o registro histórico no banco;
 - `is_available` é alterado pelo próprio fluxo de empréstimo/devolução, não por update manual do catálogo.
 
