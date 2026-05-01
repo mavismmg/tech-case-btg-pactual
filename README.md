@@ -70,7 +70,7 @@ Embora o domínio seja uma biblioteca, o projeto modela problemas comuns em sist
 - Docker
 - Docker Compose
 - Python 3.12 ou superior, caso rode fora do container
-- Node.js compatível com a versão instalada do Vite, caso rode o frontend
+- Node.js `^20.19.0` ou `>=22.12.0` e npm 10+, caso rode o frontend
 
 ### Variáveis de Ambiente
 
@@ -682,6 +682,7 @@ Ele existe principalmente para mostrar a API em fluxos reais e facilitar avalia�
 Rodar:
 
 ```bash
+cp frontend/.env.example frontend/.env
 make frontend-install
 make frontend
 ```
@@ -693,9 +694,14 @@ http://localhost:5173
 Configuração:
 
 ```env
+# frontend/.env
 VITE_API_URL=http://localhost:8000
+
+# .env da API, caso altere a origem do frontend
 CORS_ORIGINS=http://localhost:5173
 ```
+
+Em uma máquina recém-clonada, rode a API antes do frontend com `make start` ou, em terminais separados, `make db` seguido de `make local`. O alvo `make frontend-install` usa `npm ci` para instalar exatamente as versões do `frontend/package-lock.json`; se o Node estiver abaixo de `20.19.0`, o Vite pode falhar ao instalar ou iniciar.
 
 ## Endpoints Principais
 
