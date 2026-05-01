@@ -33,7 +33,12 @@ def create_book(book: BookCreate, db: Session = Depends(get_db)) -> BookResponse
             detail=str(e)
         )
 
-@router.get("/", response_model=PaginatedResponse[BookResponse], status_code=status.HTTP_200_OK)
+@router.get(
+    "/",
+    response_model=PaginatedResponse[BookResponse],
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(rate_limit(limit=60))],
+)
 def list_books(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> PaginatedResponse[BookResponse]:
     books, total = book_service.list_books(db, skip, limit)
     book_responses = [BookResponse.model_validate(book) for book in books]
@@ -69,7 +74,12 @@ def get_exemplars_by_isbn(isbn: str, db: Session = Depends(get_db)) -> Sequence[
             detail=str(e)
         )
 
-@router.get("/{book_id}", response_model=BookResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{book_id}",
+    response_model=BookResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(rate_limit(limit=120))],
+)
 def get_book(book_id: int, db: Session = Depends(get_db)) -> BookResponse:
     try:
         return book_service.get_book(db, book_id)
