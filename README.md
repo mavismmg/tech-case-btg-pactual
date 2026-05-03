@@ -153,9 +153,9 @@ Credenciais locais:
 
 | Perfil | Email | Senha |
 | --- | --- | --- |
-| `admin` | `admin@example.com` | `strong-password` |
-| `librarian` | `librarian@example.com` | `strong-password` |
-| `reader` | `reader-account@example.com` | `strong-password` |
+| `admin` | `admin@example.com` | `12345678` |
+| `librarian` | `librarian@example.com` | `12345678` |
+| `reader` | `reader-account@example.com` | `12345678` |
 
 ### Parar Containers
 
@@ -283,7 +283,7 @@ Makefile           # Comandos auxiliares
 | Interface Segregation | Separação por módulos e camadas sem interfaces artificiais. |
 | Dependency Inversion | Parcial. Services usam repositories concretos por simplicidade do case; em produção poderia evoluir para ports/adapters. |
 
-Trade-off: manter clareza e baixa cerimônia para um tech case, sem criar arquitetura enterprise desnecessária.
+Trade-off: manter clareza e baixa complexidade para um tech case, sem criar arquitetura enterprise desnecessária.
 
 ## Modelo de Domínio
 
@@ -815,7 +815,7 @@ curl -X POST http://localhost:8000/auth/bootstrap \
   -d '{
     "name": "Admin",
     "email": "admin@example.com",
-    "password": "strong-password"
+    "password": "12345678"
   }'
 ```
 
@@ -826,7 +826,7 @@ curl -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@example.com",
-    "password": "strong-password"
+    "password": "12345678"
   }'
 ```
 
@@ -853,7 +853,7 @@ curl -X POST http://localhost:8000/accounts/ \
   -d '{
     "name": "Reader Account",
     "email": "reader-account@example.com",
-    "password": "strong-password",
+    "password": "12345678",
     "role": "reader",
     "user_id": 1
   }'
